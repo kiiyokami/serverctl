@@ -29,6 +29,8 @@ spec:
               value: "4G"
             - name: JAVA_TOOL_OPTIONS
               value: "-Djava.net.preferIPv4Stack=true"
+            - name: ONLINE_MODE
+              value: "FALSE"
           ports:
             - containerPort: 25565
           resources:
