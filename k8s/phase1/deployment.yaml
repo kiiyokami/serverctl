@@ -29,8 +29,6 @@ spec:
               value: "4G"
             - name: JAVA_TOOL_OPTIONS
               value: "-Djava.net.preferIPv4Stack=true"
-            - name: ONLINE_MODE
-              value: "FALSE"
           ports:
             - containerPort: 25565
           resources:
@@ -38,8 +36,8 @@ spec:
               memory: "4Gi"
               cpu: "1"
             limits:
-              memory: "6Gi"
-              cpu: "3"
+              memory: "8Gi"
+              cpu: "4"
           readinessProbe:
             tcpSocket:
               port: 25565
