@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vanilla-chill
+  namespace: games
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vanilla-chill
+  template:
+    metadata:
+      labels:
+        app: vanilla-chill
+    spec:
+      containers:
+        - name: minecraft
+          image: itzg/minecraft-server:latest
+          env:
+            - name: EULA
+              value: "TRUE"
+            - name: TYPE
+              value: "VANILLA"
+            - name: VERSION
+              value: "LATEST"
+            - name: MEMORY
+              value: "4G"
+          ports:
+            - containerPort: 25565
+          resources:
+            requests:
+              memory: "4Gi"
+              cpu: "1"
+            limits:
+              memory: "6Gi"
+              cpu: "3"
+          readinessProbe:
+            tcpSocket:
+              port: 25565
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 25565
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          volumeMounts:
+            - mountPath: /data
+              name: world-data
+      volumes:
+        - name: world-data
+          persistentVolumeClaim:
+            claimName: vanilla-chill-data
