@@ -1,0 +1,32 @@
+# Server identity
+name: ""        # required: used as deployment name, service name, PVC name prefix
+nodePort: 30565 # required: NodePort in range 30000-32767
+
+# Number of pod replicas. Default 0 = deployed but not running.
+# Use scripts/server.sh start <name> to bring a server up.
+replicas: 0
+
+# itzg/minecraft-server configuration
+server:
+  type: VANILLA         # VANILLA | FABRIC | FORGE
+  version: "LATEST"     # Minecraft version, or LATEST
+  memory: "4G"          # JVM heap (-Xmx passed via MEMORY env var)
+  onlineMode: true      # false disables Mojang auth (for testing only)
+  mods: []              # list of mod download URLs; omitted from env if empty
+
+# Kubernetes resource requests and limits
+resources:
+  requests:
+    memory: "4Gi"
+    cpu: "1"
+  limits:
+    memory: "6Gi"
+    cpu: "2"
+
+# PVC storage size
+storage: 10Gi
+
+# Set to false for vanilla-chill migration — PVC already exists from Phase 1.
+# Set to true for new servers so Helm provisions the PVC.
+pvc:
+  create: true

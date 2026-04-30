@@ -1,0 +1,5 @@
+apiVersion: v2
+name: minecraft
+description: Helm chart for itzg/minecraft-server deployments on k3s
+type: application
+version: 0.1.0
