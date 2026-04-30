@@ -44,9 +44,11 @@ Then reload:
 sudo nginx -t && sudo nginx -s reload
 ```
 
-### 4. Add DNS record
+### 4. DNS
 
-In your registrar, add:
+If you have a wildcard DNS record (`*.yourdomain.com → <VPS_PUBLIC_IP>`), no changes needed — `mc.yourdomain.com` resolves automatically.
+
+Otherwise add an A record in your registrar:
 
 | Host | Type | TTL | Value |
 |------|------|-----|-------|
@@ -73,5 +75,5 @@ kubectl get svc -n games
 
 Each new server needs:
 1. New manifests in `k8s/phase1/` with a unique `nodePort` (30566, 30567, ...)
-2. A new `upstream` + `server` block in `nginx/minecraft-stream.conf` on the DO droplet
-3. A new DNS A record (or friends use `mc.yourdomain.com:<port>`)
+2. A new `upstream` + `server` block in `nginx/minecraft-stream.conf` on the VPS
+3. If not using a wildcard, a new DNS A record (or friends use `mc.yourdomain.com:<port>`)

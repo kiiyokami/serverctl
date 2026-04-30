@@ -21,6 +21,9 @@ echo "==> Setting up kubeconfig"
 mkdir -p ~/.kube
 cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
 
+echo "==> Waiting for node to register..."
+until kubectl get nodes 2>/dev/null | grep -q .; do sleep 2; done
+
 echo "==> Waiting for node to be Ready"
 kubectl wait node --all --for=condition=Ready --timeout=60s
 

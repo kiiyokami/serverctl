@@ -25,6 +25,8 @@ spec:
               value: "LATEST"
             - name: MEMORY
               value: "4G"
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Djava.net.preferIPv4Stack=true"
           ports:
             - containerPort: 25565
           resources:
