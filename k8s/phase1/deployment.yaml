@@ -13,6 +13,8 @@ spec:
       labels:
         app: vanilla-chill
     spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: minecraft
           image: itzg/minecraft-server:latest
