@@ -2,20 +2,17 @@
 
 > Running a Minecraft server with friends shouldn't require a sysadmin.
 
-## Hardware
-
-Beelink SER8 — AMD Ryzen 7 8845HS, 32GB RAM, 1TB NVMe, Fedora, k3s
-
 ## Prerequisites
 
-- A DigitalOcean droplet with nginx and WireGuard already configured to tunnel traffic to this machine
-- WireGuard running on this machine (the SER8) with a stable peer IP
-- A domain (`kiiyo.top`) with access to manage DNS records
+- A server (home rig or VPS) running Fedora with at least 8GB RAM
+- A public-facing VPS with nginx and WireGuard already configured to tunnel traffic to your home server
+- WireGuard running on your home server with a stable peer IP
+- A domain with access to manage DNS records
 - Minecraft Java Edition on the machines your friends use to connect
 
 ## Quick Start
 
-### 1. Install k3s (run once on the SER8)
+### 1. Install k3s (run once on your home server)
 
 ```bash
 bash scripts/install-k3s.sh
@@ -27,11 +24,11 @@ bash scripts/install-k3s.sh
 bash scripts/apply-manifests.sh
 ```
 
-### 3. Configure nginx on the DO droplet
+### 3. Configure nginx on the VPS
 
-Copy `nginx/minecraft-stream.conf` to `/etc/nginx/stream.d/` on your DigitalOcean droplet.
+Copy `nginx/minecraft-stream.conf` to `/etc/nginx/stream.d/` on your public VPS.
 
-Edit the file — replace `<WG_HOME_IP>` with the WireGuard IP of the SER8 as seen from the DO droplet (check with `ip addr show wg0` on the SER8).
+Edit the file — replace `<WG_HOME_IP>` with the WireGuard IP of your home server as seen from the VPS (check with `ip addr show wg0` on the home server).
 
 Ensure `/etc/nginx/nginx.conf` has a top-level `stream` block:
 
@@ -49,15 +46,15 @@ sudo nginx -t && sudo nginx -s reload
 
 ### 4. Add DNS record
 
-In your registrar for `kiiyo.top`, add:
+In your registrar, add:
 
 | Host | Type | TTL | Value |
 |------|------|-----|-------|
-| mc   | A    | 300 | `<DO_DROPLET_PUBLIC_IP>` |
+| mc   | A    | 300 | `<VPS_PUBLIC_IP>` |
 
 ### 5. Connect
 
-Open Minecraft → Multiplayer → Direct Connection → `mc.kiiyo.top:25565`
+Open Minecraft → Multiplayer → Direct Connection → `mc.yourdomain.com:25565`
 
 ## Verification
 
@@ -77,4 +74,4 @@ kubectl get svc -n games
 Each new server needs:
 1. New manifests in `k8s/phase1/` with a unique `nodePort` (30566, 30567, ...)
 2. A new `upstream` + `server` block in `nginx/minecraft-stream.conf` on the DO droplet
-3. A new DNS A record (or friends use `mc.kiiyo.top:<port>`)
+3. A new DNS A record (or friends use `mc.yourdomain.com:<port>`)
