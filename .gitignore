@@ -2,3 +2,7 @@
 *.swo
 .DS_Store
 .env
+*.log
+kubeconfig
+*.kubeconfig
+docs/superpowers/

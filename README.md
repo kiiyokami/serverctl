@@ -6,6 +6,13 @@
 
 Beelink SER8 — AMD Ryzen 7 8845HS, 32GB RAM, 1TB NVMe, Fedora, k3s
 
+## Prerequisites
+
+- A DigitalOcean droplet with nginx and WireGuard already configured to tunnel traffic to this machine
+- WireGuard running on this machine (the SER8) with a stable peer IP
+- A domain (`kiiyo.top`) with access to manage DNS records
+- Minecraft Java Edition on the machines your friends use to connect
+
 ## Quick Start
 
 ### 1. Install k3s (run once on the SER8)
