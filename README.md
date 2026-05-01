@@ -2,7 +2,6 @@
 
 > Running game servers with friends shouldn't require a sysadmin.
 
-
 ## Prerequisites
 
 - Fedora server (home rig) with at least 16GB RAM
@@ -15,16 +14,16 @@
 
 All servers live at your domain on different ports (e.g. `mc.example.com:25565`, `mc.example.com:25566`):
 
-| Port | NodePort | Notes |
-|------|----------|-------|
-| 25565 | 30565 | |
-| 25566 | 30566 | |
-| 25567 | 30567 | |
-| 25568 | 30568 | |
+| Port | NodePort |
+|------|----------|
+| 25565 | 30565 |
+| 25566 | 30566 |
+| 25567 | 30567 |
+| 25568 | 30568 |
 
-Servers are defined locally in `k8s/helm/values/servers/` (gitignored — each machine manages its own). Copy a template from `k8s/helm/values/templates/` to get started.
+Server configs live locally in `k8s/helm/values/servers/` (gitignored — each machine manages its own).
 
-Servers shut down automatically after **5 minutes with no players** (idle TTL). The `minecraft-idle-watcher` CronJob checks every 2 minutes via Minecraft's Server List Ping and scales the deployment to 0 when the server has been empty long enough. To change the TTL, edit `TTL_SECONDS` in [k8s/idle-watcher/cronjob.yaml](k8s/idle-watcher/cronjob.yaml) and re-run `apply-manifests.sh`.
+Servers auto-shut-down after **5 minutes with no players**. The `minecraft-idle-watcher` CronJob checks every 2 minutes via Minecraft's Server List Ping and scales the deployment to 0 when empty. Change the TTL by editing `TTL_SECONDS` in [k8s/idle-watcher/cronjob.yaml](k8s/idle-watcher/cronjob.yaml) and re-running `apply-manifests.sh`.
 
 ## Quick Start
 
@@ -42,42 +41,105 @@ bash scripts/apply-manifests.sh
 
 Creates the `games` namespace and deploys the idle watcher. No Minecraft servers are created yet.
 
-### 3. Create and start a server
+### 3. Create a server
 
 ```bash
 bash scripts/server.sh create
 ```
 
-Prompts for a name and type (vanilla/fabric/forge), auto-picks the next free port, generates the config in `k8s/helm/values/servers/`, and offers to start it immediately.
+Prompts for:
+- **Name** — used as the world identifier and Helm release name (lowercase, no spaces)
+- **Type** — Vanilla, Fabric, or Forge
 
-### 5. Stop a server
+Auto-picks the next free NodePort, generates the config in `k8s/helm/values/servers/<name>.yaml`, and offers to start it immediately.
+
+### 4. Add a mod or modpack (optional)
 
 ```bash
-bash scripts/server.sh stop my-server
+# Modrinth modpack
+bash scripts/server.sh mods <name> https://modrinth.com/modpack/cobbleverse
+
+# Modrinth single mod (auto-resolves the version matching your server's MC version)
+bash scripts/server.sh mods <name> https://modrinth.com/mod/lithium
+
+# CurseForge modpack (requires CF_API_KEY — see below)
+bash scripts/server.sh mods <name> https://www.curseforge.com/minecraft/modpacks/all-the-mods-9
+
+# Direct JAR URL
+bash scripts/server.sh mods <name> https://example.com/path/to/mod.jar
+```
+
+If the server is already deployed, the script prompts to apply via `helm upgrade` (Kubernetes rolls the pod automatically).
+
+### 5. Start, stop, status
+
+```bash
+bash scripts/server.sh start <name>     # provisions on first run, then scales to 1
+bash scripts/server.sh stop <name>      # scales to 0 (world data preserved)
+bash scripts/server.sh status <name>    # show deployment + pod state
+bash scripts/server.sh list             # all servers in the games namespace
 ```
 
 ### 6. Delete a server
 
 ```bash
-bash scripts/server.sh delete my-server
+bash scripts/server.sh delete <name>          # uninstall Helm release (PVC kept)
+bash scripts/server.sh delete <name> --purge  # also wipe world data + local config
 ```
 
-Removes the Helm release. World data in the PVC is preserved. To also wipe the world:
+`--purge` requires you to type the server name to confirm.
 
-```bash
-kubectl delete pvc my-server-data -n games
+## Server Configuration
+
+Each server's `k8s/helm/values/servers/<name>.yaml` controls everything:
+
+```yaml
+name: "my-server"
+nodePort: 30565
+
+# Container image — pick one to match your mod/loader:
+#   itzg/minecraft-server:latest   — newest Java (currently 25)
+#   itzg/minecraft-server:java21   — Java 21 (most 1.20+ mods)
+#   itzg/minecraft-server:java17   — Java 17 (1.17–1.20)
+image: itzg/minecraft-server:java21
+
+server:
+  type: FABRIC                  # VANILLA | FABRIC | FORGE
+  version: "1.21.1"             # Pin a specific MC version. Avoid LATEST — newer
+                                # MC may need newer Java than your image provides.
+  memory: "8G"
+  onlineMode: true
+  mods: []                      # individual mod JAR URLs (managed by `server.sh mods`)
+
+resources:
+  requests: { memory: "8Gi", cpu: "1" }
+  limits:   { memory: "12Gi", cpu: "4" }
+
+storage: 40Gi
+
+# Extra env vars passed straight to itzg/minecraft-server. Used by `server.sh mods`
+# to set TYPE=MODRINTH/MODRINTH_PROJECT for modpacks. Also useful for tunables like
+# JVM_OPTS, MOTD, MAX_PLAYERS, etc.
+extraEnv:
+  JVM_OPTS: "-XX:+UseZGC -XX:+ZGenerational"
 ```
 
-### 7. Check server status
+### CurseForge API key
 
-```bash
-bash scripts/server.sh status my-server
-bash scripts/server.sh list
+CurseForge modpacks require an API key. Get one at https://console.curseforge.com/, then add it to the values file:
+
+```yaml
+extraEnv:
+  TYPE: AUTO_CURSEFORGE
+  CF_SLUG: <pack-slug>
+  CF_API_KEY: "<your-key>"
 ```
+
+The `servers/` directory is gitignored, so the key stays local.
 
 ## Configure nginx on the VPS (one-time setup)
 
-Copy `nginx/minecraft-stream.conf` to the VPS, replacing `<WG_HOME_IP>` with the WireGuard IP of your home server. Then open the port range. You never need to touch this again — all 4 slots are pre-wired.
+Copy `nginx/minecraft-stream.conf` to the VPS, replacing `<WG_HOME_IP>` with your home server's WireGuard IP:
 
 ```bash
 sed "s/<WG_HOME_IP>/$(ip -4 -o addr show wg0 | awk '{print $4}' | cut -d/ -f1)/" \
@@ -102,58 +164,29 @@ stream {
 
 ## DNS (one-time setup)
 
-One A record is all you need. All servers share the same domain, different ports.
+One A record covers all servers — they share the domain, just different ports.
 
 | Host | Type | Value |
 |------|------|-------|
 | mc | A | `<VPS_PUBLIC_IP>` |
 
-## Adding Mods
+## Tips
 
-Edit the `mods` list in your server's values file:
-
-```yaml
-server:
-  mods:
-    - https://cdn.modrinth.com/data/AANobbMI/versions/IZskON6d/sodium-fabric-0.5.8%2Bmc1.21.jar
-    - https://cdn.modrinth.com/data/gvQqBUqZ/versions/oKSNd6ca/lithium-fabric-mc1.21-0.12.1.jar
-```
-
-Then apply the update:
-
-```bash
-helm upgrade <name> k8s/helm/minecraft -f k8s/helm/values/servers/<name>.yaml -n games
-```
-
-The pod restarts automatically and downloads the mods on startup.
-
-## Adding a New Server
-
-1. Copy a template: `cp k8s/helm/values/templates/forge.yaml k8s/helm/values/servers/<name>.yaml`
-2. Set `name` and pick an unused `nodePort` from 30565–30568
-3. Run `bash scripts/server.sh start <name>`
-
-That's it. nginx and DNS are already configured.
+- **`kubectl` and `helm` outside the scripts**: k3s stores its kubeconfig at `/etc/rancher/k3s/k3s.yaml`, which `helm` doesn't auto-discover. Add this to your `~/.bashrc`:
+  ```bash
+  export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+  ```
+- **Modpacks take time to boot.** First start can run 5–10 minutes while it downloads the modpack and generates dimensions. The startup probe gives it up to 10 minutes before the pod is considered failed.
+- **World data persists** across stops, deletes (without `--purge`), and pod restarts via the PVC.
 
 ## Verification
 
 ```bash
-# All releases installed
-helm list -n games
+helm list -n games                                  # all releases
+kubectl get deployments -n games                    # all servers
+kubectl logs -n games -l app=<name> -f              # follow server logs
+# wait for: [Server thread/INFO]: Done (Xs)! For help, type "help"
 
-# All deployments at 0 replicas
-kubectl get deployments -n games
-
-# Create and start a server
-bash scripts/server.sh create
-
-# Follow logs
-kubectl logs -n games -l app=<name> -f
-# Wait for: [Server thread/INFO]: Done (Xs)! For help, type "help"
-
-# Check idle watcher is running
-kubectl get cronjob minecraft-idle-watcher -n games
-
-# View idle watcher logs (runs every 2 min)
-kubectl logs -n games -l job-name --tail=50
+kubectl get cronjob minecraft-idle-watcher -n games  # idle watcher healthy
+kubectl logs -n games -l job-name --tail=50          # recent watcher runs
 ```
