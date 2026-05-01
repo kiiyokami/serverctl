@@ -170,12 +170,15 @@ case "$CMD" in
         python3 "$SCRIPT_DIR/mod.py" "$VALUES_FILE" "$URL"
         echo ""
         if helm status "$SERVER" -n "$NAMESPACE" &>/dev/null; then
-            read -rp "Apply now (helm upgrade)? [y/N]: " APPLY
-            if [[ "${APPLY,,}" == "y" ]]; then
+            read -rp "Apply now (helm upgrade)? [Y/n]: " APPLY
+            if [[ "${APPLY,,}" != "n" ]]; then
                 helm upgrade --install "$SERVER" "$CHART" -f "$VALUES_FILE" -n "$NAMESPACE"
-                echo ""
-                echo "  Restart the server for changes to take effect:"
-                echo "    bash scripts/server.sh stop $SERVER && bash scripts/server.sh start $SERVER"
+                RUNNING=$(kubectl get deployment "$SERVER" -n "$NAMESPACE" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo 0)
+                if [[ "$RUNNING" -gt 0 ]]; then
+                    echo "  Pod is rolling out automatically with the new config."
+                else
+                    echo "  Changes applied. Will take effect on next 'server.sh start $SERVER'."
+                fi
             fi
         fi
         ;;
