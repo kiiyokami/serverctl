@@ -18,7 +18,8 @@ fi
 
 echo "==> Building bot image"
 cd "$REPO_ROOT/bot"
-docker build -t serverctl-bot:dev .
+# --network host avoids docker bridge MTU issues on WireGuard hosts
+docker build --network host -t serverctl-bot:dev .
 
 echo "==> Importing image into k3s containerd"
 docker save serverctl-bot:dev | sudo k3s ctr images import -
