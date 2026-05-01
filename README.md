@@ -164,6 +164,31 @@ stream {
 }
 ```
 
+## Discord Bot (optional)
+
+Rust bot that exposes server lifecycle as slash commands. Servers are scoped per Discord guild — each guild only sees and manages servers it created. Servers created via `scripts/server.sh` directly (no `discordGuildId`) are invisible to the bot.
+
+### Setup
+
+1. Create a Discord application + bot at https://discord.com/developers/applications, copy the bot token.
+2. Copy the secret template and fill in your token:
+   ```bash
+   cp k8s/discord-bot/secret-template.yaml k8s/discord-bot/secret.yaml
+   $EDITOR k8s/discord-bot/secret.yaml
+   ```
+3. Edit `k8s/discord-bot/deployment.yaml` — replace the `REPLACE_ME` placeholder in `hostPath.path` with the absolute path of this repo on your home server.
+4. Build and install:
+   ```bash
+   bash scripts/install-bot.sh
+   ```
+5. Invite the bot to your Discord with the `applications.commands` and `bot` scopes.
+
+### Commands
+
+`/create <name> <type>`, `/list`, `/status <name>`, `/start <name>`, `/stop <name>`, `/delete <name> [purge:true]`, `/mods <name> <url>`
+
+`MAX_CONCURRENT=2` is enforced in `/start` (matches the host script).
+
 ## DNS (one-time setup)
 
 One A record covers all servers — they share the domain, just different ports.

@@ -1,0 +1,23 @@
+[package]
+name = "serverctl-bot"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+poise = "0.6"
+serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "model", "rustls_backend"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "process", "fs"] }
+kube = { version = "0.95", features = ["runtime", "derive"] }
+k8s-openapi = { version = "0.23", features = ["latest"] }
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+regex = "1"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[profile.release]
+strip = true
+lto = true
