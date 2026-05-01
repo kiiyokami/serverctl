@@ -17,25 +17,36 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: minecraft
-          image: itzg/minecraft-server:latest
+          image: {{ .Values.image | default "itzg/minecraft-server:latest" }}
           env:
             - name: EULA
               value: "TRUE"
+            {{- $extra := .Values.extraEnv | default dict }}
+            {{- if not (hasKey $extra "TYPE") }}
             - name: TYPE
               value: {{ .Values.server.type | quote }}
+            {{- end }}
+            {{- if not (hasKey $extra "VERSION") }}
             - name: VERSION
               value: {{ .Values.server.version | quote }}
+            {{- end }}
+            {{- if not (hasKey $extra "MEMORY") }}
             - name: MEMORY
               value: {{ .Values.server.memory | quote }}
+            {{- end }}
+            {{- if not (hasKey $extra "ONLINE_MODE") }}
             - name: ONLINE_MODE
               value: {{ .Values.server.onlineMode | ternary "TRUE" "FALSE" | quote }}
+            {{- end }}
+            {{- if not (hasKey $extra "JAVA_TOOL_OPTIONS") }}
             - name: JAVA_TOOL_OPTIONS
               value: "-Djava.net.preferIPv4Stack=true"
-            {{- if .Values.server.mods }}
+            {{- end }}
+            {{- if and .Values.server.mods (not (hasKey $extra "MODS")) }}
             - name: MODS
               value: {{ .Values.server.mods | join "," | quote }}
             {{- end }}
-            {{- range $k, $v := .Values.extraEnv }}
+            {{- range $k, $v := $extra }}
             - name: {{ $k }}
               value: {{ $v | quote }}
             {{- end }}
