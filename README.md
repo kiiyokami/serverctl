@@ -24,6 +24,8 @@ Beelink SER8 — AMD Ryzen 7 8845HS, 32GB RAM, 1TB NVMe, Fedora, k3s
 
 All servers default to `replicas: 0` — deployed but not running. Use `scripts/server.sh` to start them on demand.
 
+Servers shut down automatically after **5 minutes with no players** (idle TTL). The `minecraft-idle-watcher` CronJob checks every 2 minutes via Minecraft's Server List Ping and scales the deployment to 0 when the server has been empty long enough. To change the TTL, edit `TTL_SECONDS` in [k8s/idle-watcher/cronjob.yaml](k8s/idle-watcher/cronjob.yaml) and re-run `apply-manifests.sh`.
+
 ## Quick Start
 
 ### 1. Install k3s (run once on the SER8)
@@ -156,4 +158,10 @@ kubectl logs -n games -l app=vanilla-chill -f
 # Wait for: [Server thread/INFO]: Done (Xs)! For help, type "help"
 
 # Connect: mc.kiiyo.top:25565
+
+# Check idle watcher is running
+kubectl get cronjob minecraft-idle-watcher -n games
+
+# View idle watcher logs (runs every 2 min)
+kubectl logs -n games -l job-name --tail=50
 ```

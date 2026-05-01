@@ -38,6 +38,12 @@ helm upgrade --install vanilla-chill "$CHART" -f "$VALUES/vanilla-chill.yaml" -n
 helm upgrade --install fabric-chill  "$CHART" -f "$VALUES/fabric-chill.yaml"  -n games
 helm upgrade --install forge-chill   "$CHART" -f "$VALUES/forge-chill.yaml"   -n games
 
+echo "==> Deploying idle watcher (auto-shutdown after 5 min with no players)"
+kubectl apply -f "$REPO_ROOT/k8s/idle-watcher/rbac.yaml"
+kubectl apply -f "$REPO_ROOT/k8s/idle-watcher/state-configmap.yaml"
+kubectl apply -f "$REPO_ROOT/k8s/idle-watcher/script-configmap.yaml"
+kubectl apply -f "$REPO_ROOT/k8s/idle-watcher/cronjob.yaml"
+
 echo ""
 echo "==> Done!"
 helm list -n games
