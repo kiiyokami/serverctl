@@ -3,7 +3,13 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MANIFESTS="$REPO_ROOT/k8s/phase1"
+CHART="$REPO_ROOT/k8s/helm/minecraft"
+VALUES="$REPO_ROOT/k8s/helm/values"
+
+if ! command -v helm &>/dev/null; then
+  echo "==> Helm not found, installing..."
+  curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+fi
 
 echo "==> Checking pod internet connectivity..."
 kubectl run -n games nettest --image=busybox --restart=Never \
@@ -24,23 +30,14 @@ fi
 echo "  Connectivity OK"
 echo ""
 
-echo "==> Applying Phase 1 manifests"
-kubectl apply -f "$MANIFESTS/namespace.yaml"
-kubectl apply -f "$MANIFESTS/pvc.yaml"
-kubectl apply -f "$MANIFESTS/deployment.yaml"
-kubectl apply -f "$MANIFESTS/service.yaml"
+echo "==> Applying namespace"
+kubectl apply -f "$REPO_ROOT/k8s/namespace.yaml"
 
-echo "==> Waiting for deployment to be available (up to 3 minutes)..."
-kubectl wait deployment/vanilla-chill \
-  --namespace=games \
-  --for=condition=Available \
-  --timeout=180s
+echo "==> Deploying servers (replicas=0 — use scripts/server.sh start <name> to run)"
+helm upgrade --install vanilla-chill "$CHART" -f "$VALUES/vanilla-chill.yaml" -n games
+helm upgrade --install fabric-chill  "$CHART" -f "$VALUES/fabric-chill.yaml"  -n games
+helm upgrade --install forge-chill   "$CHART" -f "$VALUES/forge-chill.yaml"   -n games
 
 echo ""
 echo "==> Done!"
-echo ""
-echo "Pods:"
-kubectl get pods -n games
-echo ""
-echo "Services:"
-kubectl get svc -n games
+helm list -n games
