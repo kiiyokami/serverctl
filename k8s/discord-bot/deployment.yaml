@@ -26,6 +26,16 @@ spec:
               value: /serverctl
             - name: RUST_LOG
               value: info
+            # Public domain shown to users in /status, /list, etc. (e.g. "mc.example.com").
+            - name: PUBLIC_DOMAIN
+              value: REPLACE_ME_DOMAIN
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
           volumeMounts:
             - name: serverctl-repo
               mountPath: /serverctl
