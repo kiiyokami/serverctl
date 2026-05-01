@@ -111,8 +111,8 @@ case "$CMD" in
         fi
         echo "==> Starting $SERVER"
         kubectl scale deployment/"$SERVER" -n "$NAMESPACE" --replicas=1
-        echo "==> Waiting for $SERVER to be ready (up to 3 minutes)..."
-        kubectl rollout status deployment/"$SERVER" -n "$NAMESPACE" --timeout=180s
+        echo "==> Waiting for $SERVER to be ready (up to 10 minutes — modpacks take a while)..."
+        kubectl rollout status deployment/"$SERVER" -n "$NAMESPACE" --timeout=600s
         echo ""
         kubectl get pods -n "$NAMESPACE" -l "app=$SERVER"
         ;;
