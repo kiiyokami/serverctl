@@ -1,11 +1,5 @@
-# Vanilla server template
-# Copy to k8s/helm/values/servers/<your-name>.yaml and fill in name + nodePort.
-#
-# Public ports 25565–25568 map to NodePorts 30565–30568.
-# Pick any unused port from 30565–30568.
-
-name: ""        # required: unique name for this server
-nodePort: 30565 # required: pick an unused port from 30565–30568
+name: "vanilla-chill"
+nodePort: 30565 
 
 server:
   type: VANILLA
@@ -17,9 +11,12 @@ server:
 resources:
   requests:
     memory: "8Gi"
-    cpu: "1"
+    cpu: "2"
   limits:
     memory: "10Gi"
-    cpu: "4"
+    cpu: "8"
 
 storage: 20Gi
+
+extraEnv:
+  JVM_OPTS: "-XX:+UseZGC -XX:+ZGenerational"

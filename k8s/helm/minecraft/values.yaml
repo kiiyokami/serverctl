@@ -30,3 +30,7 @@ storage: 10Gi
 # Set to true for new servers so Helm provisions the PVC.
 pvc:
   create: true
+
+# Extra env vars passed to the container as-is. Useful for itzg/minecraft-server
+# tunables like JVM_OPTS, USE_AIKAR_FLAGS, MAX_PLAYERS, MOTD, etc.
+extraEnv: {}
