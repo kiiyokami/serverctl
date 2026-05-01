@@ -11,23 +11,20 @@ if ! command -v helm &>/dev/null; then
   curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 fi
 
-echo "==> Checking pod internet connectivity..."
-kubectl run -n games nettest --image=busybox --restart=Never \
-  -- sh -c "wget -q -O /dev/null https://launchermeta.mojang.com && echo OK || echo FAIL" 2>/dev/null || true
-kubectl wait -n games pod/nettest --for=condition=Ready --timeout=30s 2>/dev/null || true
-sleep 15
-NETTEST_RESULT=$(kubectl logs -n games nettest 2>/dev/null || echo "FAIL")
-kubectl delete pod -n games nettest 2>/dev/null || true
-
-if [[ "$NETTEST_RESULT" != *"OK"* ]]; then
+echo "==> Checking flannel MTU..."
+FLANNEL_MTU=$(ip link show flannel.1 2>/dev/null | grep -oP 'mtu \K[0-9]+' || echo "0")
+if [[ "$FLANNEL_MTU" -eq 0 ]]; then
+  echo "  flannel.1 not found yet (k3s may still be starting)"
+elif [[ "$FLANNEL_MTU" -gt 1450 ]]; then
   echo ""
-  echo "ERROR: Pods cannot reach the internet (HTTPS failed)."
-  echo "  This is usually an MTU issue with flannel VXLAN. Fix with:"
-  echo "    sudo ip link set dev flannel.1 mtu 1450"
-  echo "  Then re-run this script."
+  echo "ERROR: flannel.1 MTU is $FLANNEL_MTU — must be ≤1450 when running over WireGuard."
+  echo "  Temporary fix:  sudo ip link set dev flannel.1 mtu 1450"
+  echo "  Permanent fix:  sudo systemctl enable --now flannel-mtu-fix.service"
+  echo "  (See scripts/install-k3s.sh for the service definition)"
   exit 1
+else
+  echo "  flannel.1 MTU is $FLANNEL_MTU — OK"
 fi
-echo "  Connectivity OK"
 echo ""
 
 echo "==> Applying namespace"
