@@ -7,3 +7,4 @@ kubeconfig
 *.kubeconfig
 docs/superpowers/
 k8s/helm/values/servers/
+k8s/discord-bot/secret.yaml

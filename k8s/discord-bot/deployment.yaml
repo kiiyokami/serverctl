@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minecraft-discord-bot
+  namespace: games
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minecraft-discord-bot
+  template:
+    metadata:
+      labels:
+        app: minecraft-discord-bot
+    spec:
+      serviceAccountName: minecraft-discord-bot
+      containers:
+        - name: bot
+          image: serverctl-bot:dev
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: minecraft-discord-bot
+          env:
+            - name: SERVERCTL_REPO_ROOT
+              value: /serverctl
+            - name: RUST_LOG
+              value: info
+          volumeMounts:
+            - name: serverctl-repo
+              mountPath: /serverctl
+      volumes:
+        - name: serverctl-repo
+          hostPath:
+            # Adjust to match the path of this repo on your home server.
+            path: /home/REPLACE_ME/serverctl
+            type: Directory

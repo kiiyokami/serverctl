@@ -41,3 +41,7 @@ pvc:
 # Extra env vars passed to the container as-is. Useful for itzg/minecraft-server
 # tunables like JVM_OPTS, USE_AIKAR_FLAGS, MAX_PLAYERS, MOTD, etc.
 extraEnv: {}
+
+# Discord guild ID that owns this server. Set automatically by the bot's /create.
+# Empty/null = host-managed, invisible to the bot.
+discordGuildId: ""

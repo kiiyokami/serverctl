@@ -3,6 +3,10 @@ kind: Deployment
 metadata:
   name: {{ .Values.name }}
   namespace: games
+  {{- if .Values.discordGuildId }}
+  annotations:
+    serverctl.io/discord-guild-id: {{ .Values.discordGuildId | quote }}
+  {{- end }}
 spec:
   replicas: {{ .Values.replicas }}
   selector:
