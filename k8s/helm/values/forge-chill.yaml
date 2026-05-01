@@ -1,0 +1,23 @@
+name: forge-chill
+nodePort: 30567
+
+server:
+  type: FORGE
+  version: "LATEST"
+  memory: "14G"
+  onlineMode: true
+  mods: []
+
+resources:
+  requests:
+    memory: "14Gi"
+    cpu: "2"
+  limits:
+    memory: "16Gi"
+    cpu: "4"
+
+storage: 50Gi
+replicas: 0
+
+pvc:
+  create: true

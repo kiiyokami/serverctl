@@ -1,0 +1,23 @@
+name: fabric-chill
+nodePort: 30566
+
+server:
+  type: FABRIC
+  version: "LATEST"
+  memory: "10G"
+  onlineMode: true
+  mods: []
+
+resources:
+  requests:
+    memory: "10Gi"
+    cpu: "1"
+  limits:
+    memory: "12Gi"
+    cpu: "4"
+
+storage: 30Gi
+replicas: 0
+
+pvc:
+  create: true
