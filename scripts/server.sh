@@ -22,7 +22,8 @@ usage() {
     echo "  stop   <name>   Scale to 0 replicas (world data preserved)"
     echo "  status <name>   Show deployment and pod state"
     echo "  list            Show all servers"
-    echo "  delete <name>   Uninstall the Helm release (world data preserved in PVC)"
+    echo "  delete <name>          Uninstall the Helm release (world data preserved in PVC)"
+    echo "  delete <name> --purge  Also delete the PVC and local values file (DESTRUCTIVE)"
     exit 1
 }
 
@@ -56,17 +57,19 @@ case "$CMD" in
             *) echo "ERROR: Invalid choice."; exit 1 ;;
         esac
 
-        # Auto-pick next free NodePort
-        USED_PORTS=$(grep -h '^nodePort:' "$VALUES"/*.yaml 2>/dev/null | grep -oP '\d+' || true)
+        # Auto-pick next free NodePort — check both local configs and live cluster
+        LOCAL_PORTS=$(grep -h '^nodePort:' "$VALUES"/*.yaml 2>/dev/null | grep -oP '\d+' || true)
+        CLUSTER_PORTS=$(kubectl get svc -n "$NAMESPACE" -o jsonpath='{.items[*].spec.ports[*].nodePort}' 2>/dev/null | tr ' ' '\n' || true)
+        USED_PORTS=$(printf '%s\n%s\n' "$LOCAL_PORTS" "$CLUSTER_PORTS" | sort -u)
         NODE_PORT=""
-        for PORT in $(seq 30565 30574); do
+        for PORT in $(seq 30565 30568); do
             if ! echo "$USED_PORTS" | grep -qx "$PORT"; then
                 NODE_PORT=$PORT
                 break
             fi
         done
         if [[ -z "$NODE_PORT" ]]; then
-            echo "ERROR: All ports 30565–30574 are in use."
+            echo "ERROR: All ports 30565–30568 are in use."
             exit 1
         fi
         PUBLIC_PORT=$((NODE_PORT - 5000))
@@ -131,12 +134,27 @@ case "$CMD" in
 
     delete)
         [[ -z "$SERVER" ]] && usage
-        echo "==> Deleting $SERVER (Helm release, deployment, and service)"
-        echo "  World data in PVC '$SERVER-data' will NOT be deleted."
-        helm uninstall "$SERVER" -n "$NAMESPACE"
-        echo ""
-        echo "  To also delete world data:"
-        echo "    kubectl delete pvc $SERVER-data -n $NAMESPACE"
+        PURGE="${3:-}"
+        if [[ "$PURGE" == "--purge" ]]; then
+            echo "==> PURGE: this will delete the Helm release, world data PVC, and local config."
+            echo "    Server: $SERVER"
+            read -rp "Type the server name to confirm: " CONFIRM
+            if [[ "$CONFIRM" != "$SERVER" ]]; then
+                echo "  Aborted."
+                exit 1
+            fi
+            helm uninstall "$SERVER" -n "$NAMESPACE" 2>/dev/null || echo "  (no Helm release to uninstall)"
+            kubectl delete pvc "$SERVER-data" -n "$NAMESPACE" --ignore-not-found
+            rm -f "$VALUES/$SERVER.yaml"
+            echo "  Purged."
+        else
+            echo "==> Deleting $SERVER (Helm release, deployment, and service)"
+            echo "  World data in PVC '$SERVER-data' will NOT be deleted."
+            helm uninstall "$SERVER" -n "$NAMESPACE"
+            echo ""
+            echo "  To also delete world data and local config, re-run with --purge:"
+            echo "    bash scripts/server.sh delete $SERVER --purge"
+        fi
         ;;
 
     *)
