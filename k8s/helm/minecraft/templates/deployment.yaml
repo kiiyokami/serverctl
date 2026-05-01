@@ -35,6 +35,10 @@ spec:
             - name: MODS
               value: {{ .Values.server.mods | join "," | quote }}
             {{- end }}
+            {{- range $k, $v := .Values.extraEnv }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
           ports:
             - containerPort: 25565
           resources:

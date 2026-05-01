@@ -19,7 +19,10 @@ resources:
     memory: "14Gi"
     cpu: "2"
   limits:
-    memory: "16Gi"
+    memory: "20Gi"
     cpu: "4"
 
-storage: 50Gi
+storage: 100Gi
+
+extraEnv:
+  JVM_OPTS: "-XX:+UseZGC -XX:+ZGenerational"

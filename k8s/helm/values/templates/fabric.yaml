@@ -10,16 +10,19 @@ nodePort: 30566 # required: pick an unused port from 30565–30568
 server:
   type: FABRIC
   version: "LATEST"
-  memory: "10G"
+  memory: "8G"
   onlineMode: true
   mods: []
 
 resources:
   requests:
-    memory: "10Gi"
+    memory: "8Gi"
     cpu: "1"
   limits:
     memory: "12Gi"
     cpu: "4"
 
-storage: 30Gi
+storage: 40Gi
+
+extraEnv:
+  JVM_OPTS: "-XX:+UseZGC -XX:+ZGenerational"
