@@ -17,6 +17,25 @@ sudo firewall-cmd --reload
 echo "==> Installing k3s"
 curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644
 
+echo "==> Installing flannel MTU fix (prevents pod internet connectivity issues with VXLAN)"
+sudo tee /etc/systemd/system/flannel-mtu-fix.service > /dev/null <<'SERVICE'
+[Unit]
+Description=Fix flannel.1 MTU for VXLAN over WireGuard
+After=k3s.service
+Requires=k3s.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/bin/bash -c 'until ip link show flannel.1 &>/dev/null; do sleep 1; done'
+ExecStart=/usr/sbin/ip link set dev flannel.1 mtu 1450
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+sudo systemctl daemon-reload
+sudo systemctl enable --now flannel-mtu-fix.service
+
 echo "==> Setting up kubeconfig"
 mkdir -p ~/.kube
 cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
