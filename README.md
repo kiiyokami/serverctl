@@ -34,13 +34,13 @@ Servers shut down automatically after **5 minutes with no players** (idle TTL). 
 bash scripts/install-k3s.sh
 ```
 
-### 2. Deploy all servers
+### 2. Set up the cluster
 
 ```bash
 bash scripts/apply-manifests.sh
 ```
 
-This installs all three Helm releases with `replicas: 0`. No Minecraft processes start yet. Helm is installed automatically if not present.
+Creates the `games` namespace and deploys the idle watcher. No Minecraft servers are created yet.
 
 ### 3. Start a server
 
@@ -48,13 +48,27 @@ This installs all three Helm releases with `replicas: 0`. No Minecraft processes
 bash scripts/server.sh start vanilla-chill
 ```
 
+On first run this provisions the Helm release (deployment, service, PVC) and starts it. Subsequent starts just scale it up.
+
 ### 4. Stop a server
 
 ```bash
 bash scripts/server.sh stop vanilla-chill
 ```
 
-### 5. Check server status
+### 5. Delete a server
+
+```bash
+bash scripts/server.sh delete vanilla-chill
+```
+
+Removes the Helm release. World data in the PVC is preserved. To also wipe the world:
+
+```bash
+kubectl delete pvc vanilla-chill-data -n games
+```
+
+### 6. Check server status
 
 ```bash
 bash scripts/server.sh status vanilla-chill
