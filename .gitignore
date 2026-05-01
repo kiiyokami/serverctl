@@ -6,3 +6,4 @@
 kubeconfig
 *.kubeconfig
 docs/superpowers/
+k8s/helm/values/servers/
