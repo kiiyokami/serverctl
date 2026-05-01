@@ -37,8 +37,11 @@ pub async fn scale(c: &Client, name: &str, replicas: u32) -> Result<()> {
 
 pub async fn delete_pvc(c: &Client, name: &str) -> Result<()> {
     let api: Api<PersistentVolumeClaim> = Api::namespaced(c.clone(), NS);
-    let _ = api.delete(name, &Default::default()).await;
-    Ok(())
+    match api.delete(name, &Default::default()).await {
+        Ok(_) => Ok(()),
+        Err(kube::Error::Api(ae)) if ae.code == 404 => Ok(()), // already gone
+        Err(e) => Err(e.into()),
+    }
 }
 
 pub fn guild_id(d: &Deployment) -> Option<String> {
@@ -55,4 +58,31 @@ pub fn replicas(d: &Deployment) -> u32 {
         .and_then(|s| s.replicas)
         .unwrap_or(0)
         .max(0) as u32
+}
+
+pub fn available_replicas(d: &Deployment) -> u32 {
+    d.status
+        .as_ref()
+        .and_then(|s| s.available_replicas)
+        .unwrap_or(0)
+        .max(0) as u32
+}
+
+/// Poll `get_deployment` until at least one pod is Available, or timeout.
+/// Returns true if ready, false if timed out.
+pub async fn wait_until_ready(
+    c: &Client,
+    name: &str,
+    timeout: std::time::Duration,
+) -> Result<bool> {
+    let start = std::time::Instant::now();
+    while start.elapsed() < timeout {
+        if let Some(d) = get_deployment(c, name).await? {
+            if available_replicas(&d) >= 1 {
+                return Ok(true);
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    }
+    Ok(false)
 }

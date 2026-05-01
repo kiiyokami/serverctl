@@ -1,4 +1,4 @@
-use crate::{kube as k, Context, Error};
+use crate::{config, kube as k, values, Context, Error};
 
 #[poise::command(slash_command)]
 pub async fn status(
@@ -26,8 +26,22 @@ pub async fn status(
         return Ok(());
     }
     let r = k::replicas(&dep);
-    let state = if r > 0 { "running" } else { "stopped" };
-    ctx.say(format!("`{name}`: **{state}** (replicas={r})"))
-        .await?;
+    let avail = k::available_replicas(&dep);
+    let public_port = values::read(&values::path_for(&name))
+        .ok()
+        .map(|v| v.node_port.saturating_sub(5000))
+        .unwrap_or(0);
+
+    let msg = if r == 0 {
+        format!("⚫ `{name}`: stopped")
+    } else if avail >= 1 {
+        format!(
+            "🟢 `{name}`: running — connect at `{}:{public_port}`",
+            config::public_domain()
+        )
+    } else {
+        format!("🟡 `{name}`: starting up...")
+    };
+    ctx.say(msg).await?;
     Ok(())
 }

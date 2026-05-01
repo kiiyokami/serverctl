@@ -1,6 +1,8 @@
-use crate::{auth, helm, kube as k, values, Context, Error};
+use crate::{auth, config, helm, kube as k, values, Context, Error};
+use std::time::Duration;
 
 const MAX_CONCURRENT: u32 = 2;
+const READY_TIMEOUT: Duration = Duration::from_secs(600);
 
 #[poise::command(slash_command)]
 pub async fn start(
@@ -46,9 +48,29 @@ pub async fn start(
         helm::upgrade_install(&name, &chart, &vfile).await?;
     }
     k::scale(&client, &name, 1).await?;
+
     ctx.say(format!(
-        "Starting `{name}`. Use `/status {name}` to check."
+        "Starting `{name}`... this can take up to 10 minutes for modpacks."
     ))
     .await?;
+
+    // Read public port from values file for the final message
+    let public_port = values::read(&values::path_for(&name))
+        .ok()
+        .map(|v| v.node_port.saturating_sub(5000))
+        .unwrap_or(0);
+
+    if k::wait_until_ready(&client, &name, READY_TIMEOUT).await? {
+        ctx.say(format!(
+            "✅ `{name}` is ready! Connect at `{}:{public_port}`",
+            config::public_domain()
+        ))
+        .await?;
+    } else {
+        ctx.say(format!(
+            "⏳ `{name}` is still starting after 10 min. Use `/status {name}` to check."
+        ))
+        .await?;
+    }
     Ok(())
 }
