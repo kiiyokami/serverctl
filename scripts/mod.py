@@ -23,14 +23,20 @@ except ImportError:
     sys.exit(1)
 
 
-def fetch_latest_jar(slug: str, loader: str) -> tuple[str, str]:
-    """Returns (version_name, jar_url) from Modrinth API."""
-    api = f"https://api.modrinth.com/v2/project/{slug}/version?loaders=[%22{loader}%22]"
+def fetch_latest_jar(slug: str, loader: str, game_version: str) -> tuple[str, str]:
+    """Returns (version_name, jar_url) from Modrinth API, filtered by MC version."""
+    api = (
+        f"https://api.modrinth.com/v2/project/{slug}/version"
+        f"?loaders=[%22{loader}%22]&game_versions=[%22{game_version}%22]"
+    )
     req = urllib.request.Request(api, headers={"User-Agent": "serverctl"})
     with urllib.request.urlopen(req, timeout=10) as resp:
         versions = json.loads(resp.read())
     if not versions:
-        raise SystemExit(f"ERROR: No {loader} version found for '{slug}'")
+        raise SystemExit(
+            f"ERROR: No '{slug}' version found for {loader} on Minecraft {game_version}.\n"
+            f"  Check available versions at https://modrinth.com/mod/{slug}/versions"
+        )
     latest = versions[0]
     primary = next((f for f in latest["files"] if f.get("primary")), latest["files"][0])
     return latest["name"], primary["url"]
@@ -75,7 +81,12 @@ def main():
                 f"ERROR: server.type is '{loader.upper() or 'unset'}'. "
                 "Mods require FABRIC, FORGE, NEOFORGE, or QUILT."
             )
-        version_name, jar_url = fetch_latest_jar(slug, loader)
+        game_version = values.get("server", {}).get("version", "")
+        if not game_version or game_version.upper() == "LATEST":
+            raise SystemExit(
+                "ERROR: server.version must be pinned (not LATEST) to resolve mod compatibility."
+            )
+        version_name, jar_url = fetch_latest_jar(slug, loader, game_version)
         mods = values.setdefault("server", {}).setdefault("mods", []) or []
         if jar_url in mods:
             print(f"Already present: {jar_url}")
