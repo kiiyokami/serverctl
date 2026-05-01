@@ -14,16 +14,17 @@ CMD="${1:-}"
 SERVER="${2:-}"
 
 usage() {
-    echo "Usage: $0 <create|start|stop|status|list|delete> [server-name]"
+    echo "Usage: $0 <create|start|stop|status|list|delete|mods> [args]"
     echo ""
     echo "Commands:"
-    echo "  create          Interactively create a new server config and start it"
-    echo "  start  <name>   Start a server (provisions it on first run)"
-    echo "  stop   <name>   Scale to 0 replicas (world data preserved)"
-    echo "  status <name>   Show deployment and pod state"
-    echo "  list            Show all servers"
+    echo "  create                 Interactively create a new server config and start it"
+    echo "  start  <name>          Start a server (provisions it on first run)"
+    echo "  stop   <name>          Scale to 0 replicas (world data preserved)"
+    echo "  status <name>          Show deployment and pod state"
+    echo "  list                   Show all servers"
     echo "  delete <name>          Uninstall the Helm release (world data preserved in PVC)"
     echo "  delete <name> --purge  Also delete the PVC and local values file (DESTRUCTIVE)"
+    echo "  mods   <name> <url>    Add a mod or modpack from Modrinth/CurseForge or a .jar URL"
     exit 1
 }
 
@@ -154,6 +155,28 @@ case "$CMD" in
             echo ""
             echo "  To also delete world data and local config, re-run with --purge:"
             echo "    bash scripts/server.sh delete $SERVER --purge"
+        fi
+        ;;
+
+    mods)
+        [[ -z "$SERVER" ]] && usage
+        URL="${3:-}"
+        [[ -z "$URL" ]] && usage
+        VALUES_FILE="$VALUES/$SERVER.yaml"
+        if [[ ! -f "$VALUES_FILE" ]]; then
+            echo "ERROR: No config found for '$SERVER' at $VALUES_FILE"
+            exit 1
+        fi
+        python3 "$SCRIPT_DIR/mod.py" "$VALUES_FILE" "$URL"
+        echo ""
+        if helm status "$SERVER" -n "$NAMESPACE" &>/dev/null; then
+            read -rp "Apply now (helm upgrade)? [y/N]: " APPLY
+            if [[ "${APPLY,,}" == "y" ]]; then
+                helm upgrade --install "$SERVER" "$CHART" -f "$VALUES_FILE" -n "$NAMESPACE"
+                echo ""
+                echo "  Restart the server for changes to take effect:"
+                echo "    bash scripts/server.sh stop $SERVER && bash scripts/server.sh start $SERVER"
+            fi
         fi
         ;;
 
