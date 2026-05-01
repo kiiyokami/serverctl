@@ -23,6 +23,8 @@ All servers live at your domain on different ports (e.g. `mc.example.com:25565`,
 
 Server configs live locally in `k8s/helm/values/servers/` (gitignored — each machine manages its own).
 
+At most **2 servers run concurrently** (hardware limit; configurable as `MAX_CONCURRENT` in `scripts/server.sh`). Trying to `start` a third while two are running fails with a list of currently-running servers to stop first.
+
 Servers auto-shut-down after **5 minutes with no players**. The `minecraft-idle-watcher` CronJob checks every 2 minutes via Minecraft's Server List Ping and scales the deployment to 0 when empty. Change the TTL by editing `TTL_SECONDS` in [k8s/idle-watcher/cronjob.yaml](k8s/idle-watcher/cronjob.yaml) and re-running `apply-manifests.sh`.
 
 ## Quick Start
