@@ -10,6 +10,7 @@ TEMPLATES="$REPO_ROOT/k8s/helm/values/templates"
 export KUBECONFIG="${KUBECONFIG:-/etc/rancher/k3s/k3s.yaml}"
 
 NAMESPACE=games
+MAX_CONCURRENT=2
 CMD="${1:-}"
 SERVER="${2:-}"
 
@@ -109,6 +110,20 @@ case "$CMD" in
             echo "==> Provisioning $SERVER for the first time..."
             helm upgrade --install "$SERVER" "$CHART" -f "$VALUES_FILE" -n "$NAMESPACE"
         fi
+
+        # Enforce concurrent-server limit (skip if this server is already running)
+        ALREADY_RUNNING=$(kubectl get deployment "$SERVER" -n "$NAMESPACE" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo 0)
+        if [[ "$ALREADY_RUNNING" -eq 0 ]]; then
+            RUNNING_COUNT=$(kubectl get deployments -n "$NAMESPACE" -o jsonpath='{.items[*].spec.replicas}' \
+                | tr ' ' '\n' | grep -cv '^0$' || true)
+            if [[ "$RUNNING_COUNT" -ge "$MAX_CONCURRENT" ]]; then
+                echo "ERROR: Already $RUNNING_COUNT/$MAX_CONCURRENT servers running."
+                echo "  Stop one first:"
+                kubectl get deployments -n "$NAMESPACE" -o jsonpath='{range .items[?(@.spec.replicas>0)]}    bash scripts/server.sh stop {.metadata.name}{"\n"}{end}'
+                exit 1
+            fi
+        fi
+
         echo "==> Starting $SERVER"
         kubectl scale deployment/"$SERVER" -n "$NAMESPACE" --replicas=1
         echo "==> Waiting for $SERVER to be ready (up to 10 minutes — modpacks take a while)..."
