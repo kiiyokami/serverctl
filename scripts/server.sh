@@ -80,7 +80,7 @@ case "$CMD" in
 
         echo ""
         echo "  Created: $VALUES/$SERVER_NAME.yaml"
-        echo "  Address: mc.kiiyo.top:$PUBLIC_PORT"
+        echo "  Public port: $PUBLIC_PORT (connect via your domain)"
         echo ""
 
         read -rp "Start server now? [y/N]: " START_NOW

@@ -2,9 +2,6 @@
 
 > Running game servers with friends shouldn't require a sysadmin.
 
-## Hardware
-
-Beelink SER8 — AMD Ryzen 7 8845HS, 32GB RAM, 1TB NVMe, Fedora, k3s
 
 ## Prerequisites
 
@@ -16,7 +13,7 @@ Beelink SER8 — AMD Ryzen 7 8845HS, 32GB RAM, 1TB NVMe, Fedora, k3s
 
 ## Servers
 
-All servers live at `mc.kiiyo.top` on different ports:
+All servers live at your domain on different ports (e.g. `mc.example.com:25565`, `mc.example.com:25566`):
 
 | Port | NodePort | Notes |
 |------|----------|-------|
@@ -31,7 +28,7 @@ Servers shut down automatically after **5 minutes with no players** (idle TTL). 
 
 ## Quick Start
 
-### 1. Install k3s (run once on the SER8)
+### 1. Install k3s (run once on the home server)
 
 ```bash
 bash scripts/install-k3s.sh
@@ -80,10 +77,12 @@ bash scripts/server.sh list
 
 ## Configure nginx on the VPS (one-time setup)
 
-Copy `nginx/minecraft-stream.conf` to the VPS and open the port range. You never need to touch this again — all 4 slots are pre-wired.
+Copy `nginx/minecraft-stream.conf` to the VPS, replacing `<WG_HOME_IP>` with the WireGuard IP of your home server. Then open the port range. You never need to touch this again — all 4 slots are pre-wired.
 
 ```bash
-scp nginx/minecraft-stream.conf root@<VPS_IP>:/etc/nginx/stream.d/minecraft.conf
+sed "s/<WG_HOME_IP>/$(ip -4 -o addr show wg0 | awk '{print $4}' | cut -d/ -f1)/" \
+  nginx/minecraft-stream.conf | \
+  ssh root@<VPS_IP> 'cat > /etc/nginx/stream.d/minecraft.conf'
 ```
 
 On the VPS:
