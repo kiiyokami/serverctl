@@ -6,6 +6,13 @@ nodePort: 30565 # required: NodePort in range 30000-32767
 # Use scripts/server.sh start <name> to bring a server up.
 replicas: 0
 
+# Container image for the server. Use a versioned Java tag for older mods:
+#   itzg/minecraft-server:latest   — newest Java (currently 25)
+#   itzg/minecraft-server:java21   — Java 21 (most 1.20+ mods)
+#   itzg/minecraft-server:java17   — Java 17 (1.17–1.20)
+#   itzg/minecraft-server:java8    — Java 8 (legacy MC)
+image: itzg/minecraft-server:latest
+
 # itzg/minecraft-server configuration
 server:
   type: VANILLA         # VANILLA | FABRIC | FORGE

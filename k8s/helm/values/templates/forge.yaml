@@ -6,6 +6,7 @@
 
 name: ""        # required: unique name for this server
 nodePort: 30567 # required: pick an unused port from 30565–30568
+image: itzg/minecraft-server:java21  # most 1.20+ mods need Java 21
 
 server:
   type: FORGE

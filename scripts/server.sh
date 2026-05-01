@@ -34,7 +34,9 @@ case "$CMD" in
         echo ""
 
         # Name
-        read -rp "Server name: " SERVER_NAME
+        echo "Server name — used as the world identifier and Helm release name."
+        echo "Keep it lowercase, no spaces (e.g. 'cobbleverse', 'survival', 'creative-test')."
+        read -rp "Name: " SERVER_NAME
         if [[ -z "$SERVER_NAME" ]]; then
             echo "ERROR: Name cannot be empty."
             exit 1
