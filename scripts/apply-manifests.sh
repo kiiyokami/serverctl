@@ -5,8 +5,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 export KUBECONFIG="${KUBECONFIG:-/etc/rancher/k3s/k3s.yaml}"
-CHART="$REPO_ROOT/k8s/helm/minecraft"
-VALUES="$REPO_ROOT/k8s/helm/values"
 
 if ! command -v helm &>/dev/null; then
   echo "==> Helm not found, installing..."
@@ -31,11 +29,6 @@ echo ""
 
 echo "==> Applying namespace"
 kubectl apply -f "$REPO_ROOT/k8s/namespace.yaml"
-
-echo "==> Deploying servers (replicas=0 — use scripts/server.sh start <name> to run)"
-helm upgrade --install vanilla-chill "$CHART" -f "$VALUES/vanilla-chill.yaml" -n games
-helm upgrade --install fabric-chill  "$CHART" -f "$VALUES/fabric-chill.yaml"  -n games
-helm upgrade --install forge-chill   "$CHART" -f "$VALUES/forge-chill.yaml"   -n games
 
 echo "==> Deploying idle watcher (auto-shutdown after 5 min with no players)"
 kubectl apply -f "$REPO_ROOT/k8s/idle-watcher/rbac.yaml"
