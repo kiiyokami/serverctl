@@ -1,0 +1,166 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: minecraft-idle-watcher-script
+  namespace: games
+data:
+  watcher.py: |
+    #!/usr/bin/env python3
+    """
+    Scales down Minecraft deployments in the games namespace when no players
+    have been online for TTL_SECONDS. Runs every 2 minutes as a CronJob.
+    Idle-since timestamps are tracked in the minecraft-idle-state ConfigMap.
+    """
+    import json, os, socket, ssl, struct, time, urllib.request, urllib.error
+
+    NAMESPACE = "games"
+    IDLE_STATE_CM = "minecraft-idle-state"
+    TTL_SECONDS = int(os.environ.get("TTL_SECONDS", "300"))
+    K8S_API = "https://kubernetes.default.svc"
+
+    TOKEN = open("/var/run/secrets/kubernetes.io/serviceaccount/token").read().strip()
+    SSL_CTX = ssl.create_default_context(
+        cafile="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+    )
+
+
+    def k8s_get(path):
+        req = urllib.request.Request(
+            K8S_API + path,
+            headers={"Authorization": f"Bearer {TOKEN}"},
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(req, context=SSL_CTX) as resp:
+                return json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return None
+            raise
+
+
+    def k8s_put(path, body):
+        req = urllib.request.Request(
+            K8S_API + path,
+            data=json.dumps(body).encode(),
+            headers={
+                "Authorization": f"Bearer {TOKEN}",
+                "Content-Type": "application/json",
+            },
+            method="PUT",
+        )
+        with urllib.request.urlopen(req, context=SSL_CTX) as resp:
+            return json.loads(resp.read())
+
+
+    def varint_encode(n):
+        out = []
+        while True:
+            b = n & 0x7F
+            n >>= 7
+            if n:
+                b |= 0x80
+            out.append(b)
+            if not n:
+                break
+        return bytes(out)
+
+
+    def mc_player_count(host, port=25565, timeout=5):
+        """Query Minecraft Server List Ping. Returns online player count or None."""
+        try:
+            with socket.create_connection((host, port), timeout=timeout) as s:
+                host_b = host.encode()
+                handshake = (
+                    varint_encode(0)              # packet id = handshake
+                    + varint_encode(765)          # protocol version (any recent)
+                    + varint_encode(len(host_b)) + host_b
+                    + struct.pack(">H", port)
+                    + varint_encode(1)            # next state = status
+                )
+                s.sendall(varint_encode(len(handshake)) + handshake)
+                s.sendall(b"\x01\x00")  # status request
+
+                data, deadline = b"", time.time() + timeout
+                while time.time() < deadline:
+                    try:
+                        chunk = s.recv(4096)
+                        if not chunk:
+                            break
+                        data += chunk
+                        if data.count(b"{") and data.count(b"{") == data.count(b"}"):
+                            break
+                    except OSError:
+                        break
+
+                start = data.find(b"{")
+                if start < 0:
+                    return None
+                depth, end = 0, start
+                for i in range(start, len(data)):
+                    depth += (data[i : i + 1] == b"{") - (data[i : i + 1] == b"}")
+                    if depth == 0:
+                        end = i + 1
+                        break
+                info = json.loads(data[start:end])
+                return info.get("players", {}).get("online", 0)
+        except Exception:
+            return None
+
+
+    def main():
+        now = int(time.time())
+
+        cm = k8s_get(f"/api/v1/namespaces/{NAMESPACE}/configmaps/{IDLE_STATE_CM}")
+        current_state = dict((cm or {}).get("data") or {})
+
+        deployments = k8s_get(f"/apis/apps/v1/namespaces/{NAMESPACE}/deployments")
+        new_state = {}
+
+        for dep in (deployments or {}).get("items", []):
+            name = dep["metadata"]["name"]
+            replicas = dep["spec"].get("replicas", 0)
+
+            if replicas == 0:
+                continue
+
+            host = f"{name}.{NAMESPACE}.svc.cluster.local"
+            count = mc_player_count(host)
+
+            if count is None:
+                print(f"{name}: unreachable (starting or crashed), skipping")
+                if name in current_state:
+                    new_state[name] = current_state[name]
+                continue
+
+            if count > 0:
+                print(f"{name}: {count} player(s) online, idle timer cleared")
+                continue
+
+            idle_since = int(current_state.get(name, now))
+            idle_secs = now - idle_since
+            print(f"{name}: empty for {idle_secs}s / {TTL_SECONDS}s TTL")
+
+            if idle_secs >= TTL_SECONDS:
+                print(f"{name}: scaling down")
+                scale = k8s_get(
+                    f"/apis/apps/v1/namespaces/{NAMESPACE}/deployments/{name}/scale"
+                )
+                if scale:
+                    scale["spec"]["replicas"] = 0
+                    k8s_put(
+                        f"/apis/apps/v1/namespaces/{NAMESPACE}/deployments/{name}/scale",
+                        scale,
+                    )
+            else:
+                new_state[name] = str(idle_since)
+
+        cm["data"] = new_state
+        k8s_put(
+            f"/api/v1/namespaces/{NAMESPACE}/configmaps/{IDLE_STATE_CM}", cm
+        )
+        print("Done.")
+
+
+    if __name__ == "__main__":
+        main()
