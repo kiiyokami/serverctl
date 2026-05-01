@@ -1,0 +1,26 @@
+# Fabric server template
+# Copy to k8s/helm/values/servers/<your-name>.yaml and fill in name + nodePort.
+#
+# NodePort 30565 = mc.kiiyo.top:25565
+# NodePort 30566 = mc.kiiyo.top:25566
+# NodePort 30567 = mc.kiiyo.top:25567  ...and so on up to 30574
+
+name: ""        # required: unique name for this server
+nodePort: 30566 # required: pick an unused port from 30565–30568
+
+server:
+  type: FABRIC
+  version: "LATEST"
+  memory: "10G"
+  onlineMode: true
+  mods: []
+
+resources:
+  requests:
+    memory: "10Gi"
+    cpu: "1"
+  limits:
+    memory: "12Gi"
+    cpu: "4"
+
+storage: 30Gi
