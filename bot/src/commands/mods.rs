@@ -55,28 +55,21 @@ pub async fn mods(
 
     let path = values::path_for(&name);
     let mut v = values::read(&path)?;
+    let mut added: Vec<String> = Vec::new();
 
-    match apply_mod_url(&mut v, &url).await? {
-        ModResult::Modpack(slug) => {
-            values::write(&path, &v)?;
-            ctx.send(reply::ok(format!(
-                "✅ Configured Modrinth modpack `{slug}` for `{name}`."
-            )))
-            .await?;
-        }
-        ModResult::Mod(slug, vn) => {
-            values::write(&path, &v)?;
-            ctx.send(reply::ok(format!("✅ Added `{slug}` ({vn}) to `{name}`.")))
-                .await?;
-        }
-        ModResult::Jar => {
-            values::write(&path, &v)?;
-            ctx.send(reply::ok(format!("✅ Added direct mod URL to `{name}`.")))
-                .await?;
-        }
-        ModResult::Unrecognized => {
-            ctx.send(reply::err("Unrecognized URL.")).await?;
+    for u in url.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+        match apply_mod_url(&mut v, u).await? {
+            ModResult::Modpack(slug) => added.push(format!("modpack `{slug}`")),
+            ModResult::Mod(slug, vn) => added.push(format!("`{slug}` ({vn})")),
+            ModResult::Jar => added.push("direct jar".into()),
+            ModResult::Unrecognized => {
+                ctx.send(reply::err(format!("Unrecognized URL: `{u}`"))).await?;
+                return Ok(());
+            }
         }
     }
+
+    values::write(&path, &v)?;
+    ctx.send(reply::ok(format!("✅ Added {} to `{name}`.", added.join(", ")))).await?;
     Ok(())
 }
