@@ -6,6 +6,7 @@ mod commands;
 mod config;
 mod helm;
 mod kube;
+mod minecraft;
 mod modrinth;
 mod reply;
 mod values;
@@ -40,6 +41,7 @@ async fn main() -> Result<()> {
                 commands::create::create(),
                 commands::delete::delete(),
                 commands::mods::mods(),
+                commands::ttl::ttl(),
             ],
             ..Default::default()
         })

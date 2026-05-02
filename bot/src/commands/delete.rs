@@ -28,16 +28,17 @@ pub async fn delete(
         Err(e) => report.push(format!("⚠️ Deployment delete: {e}")),
     }
 
+    let path = values::path_for(&name);
+    match std::fs::remove_file(&path) {
+        Ok(()) => report.push("✅ Local config removed".to_string()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => report.push(format!("⚠️ Config remove: {e}")),
+    }
+
     if purge.unwrap_or(false) {
         match k::delete_pvc(&client, &format!("{name}-data")).await {
             Ok(()) => report.push(format!("✅ PVC `{name}-data` deleted (world data wiped)")),
             Err(e) => report.push(format!("⚠️ PVC delete: {e}")),
-        }
-        let path = values::path_for(&name);
-        match std::fs::remove_file(&path) {
-            Ok(()) => report.push("✅ Local config removed".to_string()),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => report.push(format!("⚠️ Config remove: {e}")),
         }
     } else {
         report.push(

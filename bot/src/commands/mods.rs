@@ -1,6 +1,43 @@
 use crate::{auth, kube as k, modrinth, reply, values, Context, Error};
 use regex::Regex;
 
+pub enum ModResult {
+    Modpack(String),
+    Mod(String, String),
+    Jar,
+    Unrecognized,
+}
+
+pub async fn apply_mod_url(v: &mut values::Values, url: &str) -> Result<ModResult, Error> {
+    let modpack_re = Regex::new(r"^https?://modrinth\.com/modpack/([^/?#]+)")?;
+    let mod_re = Regex::new(r"^https?://modrinth\.com/mod/([^/?#]+)")?;
+
+    if let Some(c) = modpack_re.captures(url) {
+        let slug = c.get(1).unwrap().as_str().to_string();
+        let extra = v.extra_env.get_or_insert_with(serde_yaml::Mapping::new);
+        extra.insert("TYPE".into(), "MODRINTH".into());
+        extra.insert("MODRINTH_PROJECT".into(), slug.clone().into());
+        Ok(ModResult::Modpack(slug))
+    } else if let Some(c) = mod_re.captures(url) {
+        let slug = c.get(1).unwrap().as_str().to_string();
+        let loader = v.server.kind.to_lowercase();
+        let mc = v.server.version.clone();
+        let (vn, jar) = modrinth::latest_jar(&slug, &loader, &mc).await?;
+        if !v.server.mods.contains(&jar) {
+            v.server.mods.push(jar);
+        }
+        Ok(ModResult::Mod(slug, vn))
+    } else if url.to_lowercase().ends_with(".jar") {
+        let url = url.to_string();
+        if !v.server.mods.contains(&url) {
+            v.server.mods.push(url);
+        }
+        Ok(ModResult::Jar)
+    } else {
+        Ok(ModResult::Unrecognized)
+    }
+}
+
 #[poise::command(slash_command)]
 pub async fn mods(
     ctx: Context<'_>,
@@ -19,39 +56,27 @@ pub async fn mods(
     let path = values::path_for(&name);
     let mut v = values::read(&path)?;
 
-    let modpack_re = Regex::new(r"^https?://modrinth\.com/modpack/([^/?#]+)")?;
-    let mod_re = Regex::new(r"^https?://modrinth\.com/mod/([^/?#]+)")?;
-
-    if let Some(c) = modpack_re.captures(&url) {
-        let slug = c.get(1).unwrap().as_str();
-        let extra = v.extra_env.get_or_insert_with(serde_yaml::Mapping::new);
-        extra.insert("TYPE".into(), "MODRINTH".into());
-        extra.insert("MODRINTH_PROJECT".into(), slug.into());
-        ctx.send(reply::ok(format!(
-            "✅ Configured Modrinth modpack `{slug}` for `{name}`."
-        )))
-        .await?;
-    } else if let Some(c) = mod_re.captures(&url) {
-        let slug = c.get(1).unwrap().as_str();
-        let loader = v.server.kind.to_lowercase();
-        let mc = v.server.version.clone();
-        let (vn, jar) = modrinth::latest_jar(slug, &loader, &mc).await?;
-        if !v.server.mods.contains(&jar) {
-            v.server.mods.push(jar);
-        }
-        ctx.send(reply::ok(format!("✅ Added `{slug}` ({vn}) to `{name}`.")))
+    match apply_mod_url(&mut v, &url).await? {
+        ModResult::Modpack(slug) => {
+            values::write(&path, &v)?;
+            ctx.send(reply::ok(format!(
+                "✅ Configured Modrinth modpack `{slug}` for `{name}`."
+            )))
             .await?;
-    } else if url.to_lowercase().ends_with(".jar") {
-        if !v.server.mods.contains(&url) {
-            v.server.mods.push(url);
         }
-        ctx.send(reply::ok(format!("✅ Added direct mod URL to `{name}`.")))
-            .await?;
-    } else {
-        ctx.send(reply::err("Unrecognized URL.")).await?;
-        return Ok(());
+        ModResult::Mod(slug, vn) => {
+            values::write(&path, &v)?;
+            ctx.send(reply::ok(format!("✅ Added `{slug}` ({vn}) to `{name}`.")))
+                .await?;
+        }
+        ModResult::Jar => {
+            values::write(&path, &v)?;
+            ctx.send(reply::ok(format!("✅ Added direct mod URL to `{name}`.")))
+                .await?;
+        }
+        ModResult::Unrecognized => {
+            ctx.send(reply::err("Unrecognized URL.")).await?;
+        }
     }
-
-    values::write(&path, &v)?;
     Ok(())
 }

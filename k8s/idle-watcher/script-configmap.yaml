@@ -131,11 +131,16 @@ data:
                 print(f"{name}: {count} player(s) online, idle timer cleared")
                 continue
 
+            annotations = dep["metadata"].get("annotations") or {}
+            ttl = int(annotations.get("serverctl.io/ttl-seconds", TTL_SECONDS))
+            if ttl == 0:
+                continue
+
             idle_since = int(current_state.get(name, now))
             idle_secs = now - idle_since
-            print(f"{name}: empty for {idle_secs}s / {TTL_SECONDS}s TTL")
+            print(f"{name}: empty for {idle_secs}s / {ttl}s TTL")
 
-            if idle_secs >= TTL_SECONDS:
+            if idle_secs >= ttl:
                 print(f"{name}: scaling down")
                 scale = k8s_get(
                     f"/apis/apps/v1/namespaces/{NAMESPACE}/deployments/{name}/scale"
