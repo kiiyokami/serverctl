@@ -1,11 +1,11 @@
-use crate::{config, kube as k, values, Context, Error};
+use crate::{config, kube as k, reply, values, Context, Error};
 
 #[poise::command(slash_command)]
 pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
     let guild = match ctx.guild_id() {
         Some(g) => g.to_string(),
         None => {
-            ctx.say("Run this in a server, not DM.").await?;
+            ctx.send(reply::err("Run this in a server, not DM.")).await?;
             return Ok(());
         }
     };
@@ -29,13 +29,13 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
                 .unwrap_or(0);
             format!("- `{name}` — 🟢 running at `{domain}:{port}`")
         } else {
-            format!("- `{name}` — 🟡 starting...")
+            format!("- `{name}` — 🟡 starting…")
         };
         lines.push(line);
     }
     if lines.len() == 1 {
-        lines.push("_(none)_  — try `/create`".into());
+        lines.push("_(none)_ — try `/create`".into());
     }
-    ctx.say(lines.join("\n")).await?;
+    ctx.send(reply::info(lines.join("\n"))).await?;
     Ok(())
 }

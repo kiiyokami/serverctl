@@ -7,6 +7,7 @@ mod config;
 mod helm;
 mod kube;
 mod modrinth;
+mod reply;
 mod values;
 
 pub struct Data {}
@@ -15,7 +16,7 @@ pub type Context<'a> = poise::Context<'a, Data, Error>;
 
 #[poise::command(slash_command)]
 async fn ping(ctx: Context<'_>) -> Result<(), Error> {
-    ctx.say("pong").await?;
+    ctx.send(reply::ok("pong")).await?;
     Ok(())
 }
 

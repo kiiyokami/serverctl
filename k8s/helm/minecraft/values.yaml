@@ -1,27 +1,15 @@
-# Server identity
-name: ""        # required: used as deployment name, service name, PVC name prefix
-nodePort: 30565 # required: NodePort in range 30000-32767
-
-# Number of pod replicas. Default 0 = deployed but not running.
-# Use scripts/server.sh start <name> to bring a server up.
+name: ""
+nodePort: 30565
 replicas: 0
-
-# Container image for the server. Use a versioned Java tag for older mods:
-#   itzg/minecraft-server:latest   — newest Java (currently 25)
-#   itzg/minecraft-server:java21   — Java 21 (most 1.20+ mods)
-#   itzg/minecraft-server:java17   — Java 17 (1.17–1.20)
-#   itzg/minecraft-server:java8    — Java 8 (legacy MC)
 image: itzg/minecraft-server:latest
 
-# itzg/minecraft-server configuration
 server:
-  type: VANILLA         # VANILLA | FABRIC | FORGE
-  version: "LATEST"     # Minecraft version, or LATEST
-  memory: "4G"          # JVM heap (-Xmx passed via MEMORY env var)
-  onlineMode: true      # false disables Mojang auth (for testing only)
-  mods: []              # list of mod download URLs; omitted from env if empty
+  type: VANILLA
+  version: "LATEST"
+  memory: "4G"
+  onlineMode: true
+  mods: []
 
-# Kubernetes resource requests and limits
 resources:
   requests:
     memory: "4Gi"
@@ -30,18 +18,11 @@ resources:
     memory: "6Gi"
     cpu: "2"
 
-# PVC storage size
 storage: 10Gi
 
-# Set to false for vanilla-chill migration — PVC already exists from Phase 1.
-# Set to true for new servers so Helm provisions the PVC.
 pvc:
   create: true
 
-# Extra env vars passed to the container as-is. Useful for itzg/minecraft-server
-# tunables like JVM_OPTS, USE_AIKAR_FLAGS, MAX_PLAYERS, MOTD, etc.
 extraEnv: {}
 
-# Discord guild ID that owns this server. Set automatically by the bot's /create.
-# Empty/null = host-managed, invisible to the bot.
 discordGuildId: ""

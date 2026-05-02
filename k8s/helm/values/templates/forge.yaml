@@ -1,16 +1,10 @@
-# Forge server template
-# Copy to k8s/helm/values/servers/<your-name>.yaml and fill in name + nodePort.
-#
-# Public ports 25565–25568 map to NodePorts 30565–30568.
-# Pick any unused port from 30565–30568.
-
-name: ""        # required: unique name for this server
-nodePort: 30567 # required: pick an unused port from 30565–30568
-image: itzg/minecraft-server:java21  # most 1.20+ mods need Java 21
+name: ""
+nodePort: 30567
+image: itzg/minecraft-server:java21
 
 server:
   type: FORGE
-  version: "1.21.1"  # pin to Java 21-compatible MC (LATEST may pull Java 25)
+  version: "1.21.1"
   memory: "14G"
   onlineMode: true
   mods: []

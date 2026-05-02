@@ -63,14 +63,12 @@ spec:
             limits:
               memory: {{ .Values.resources.limits.memory | quote }}
               cpu: {{ .Values.resources.limits.cpu | quote }}
-          # Modpacks can take several minutes to finish worldgen on first boot.
-          # startupProbe gates liveness/readiness until the server actually accepts TCP.
           startupProbe:
             tcpSocket:
               port: 25565
             initialDelaySeconds: 30
             periodSeconds: 10
-            failureThreshold: 60      # up to 10 minutes
+            failureThreshold: 60
           readinessProbe:
             tcpSocket:
               port: 25565
@@ -79,7 +77,7 @@ spec:
             tcpSocket:
               port: 25565
             periodSeconds: 30
-            failureThreshold: 5       # tolerate brief lag spikes
+            failureThreshold: 5
           volumeMounts:
             - mountPath: /data
               name: world-data

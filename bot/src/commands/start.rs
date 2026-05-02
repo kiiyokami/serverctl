@@ -1,4 +1,4 @@
-use crate::{auth, config, helm, kube as k, values, Context, Error};
+use crate::{auth, config, helm, kube as k, reply, values, Context, Error};
 use std::time::Duration;
 
 const MAX_CONCURRENT: u32 = 2;
@@ -14,7 +14,7 @@ pub async fn start(
     let client = k::client().await?;
 
     if !auth::guild_owns(&client, &guild, &name).await? {
-        ctx.say(format!("`{name}` isn't managed by this guild."))
+        ctx.send(reply::err(format!("`{name}` isn't managed by this guild.")))
             .await?;
         return Ok(());
     }
@@ -34,9 +34,9 @@ pub async fn start(
             .filter(|r| *r > 0)
             .count() as u32;
         if running >= MAX_CONCURRENT {
-            ctx.say(format!(
+            ctx.send(reply::err(format!(
                 "Already {running}/{MAX_CONCURRENT} servers running. Stop one first."
-            ))
+            )))
             .await?;
             return Ok(());
         }
@@ -49,27 +49,26 @@ pub async fn start(
     }
     k::scale(&client, &name, 1).await?;
 
-    ctx.say(format!(
-        "Starting `{name}`... this can take up to 10 minutes for modpacks."
-    ))
+    ctx.send(reply::pending(format!(
+        "Starting `{name}`… this can take up to 10 minutes for modpacks."
+    )))
     .await?;
 
-    // Read public port from values file for the final message
     let public_port = values::read(&values::path_for(&name))
         .ok()
         .map(|v| v.node_port.saturating_sub(5000))
         .unwrap_or(0);
 
     if k::wait_until_ready(&client, &name, READY_TIMEOUT).await? {
-        ctx.say(format!(
+        ctx.send(reply::ok(format!(
             "✅ `{name}` is ready! Connect at `{}:{public_port}`",
             config::public_domain()
-        ))
+        )))
         .await?;
     } else {
-        ctx.say(format!(
+        ctx.send(reply::pending(format!(
             "⏳ `{name}` is still starting after 10 min. Use `/status {name}` to check."
-        ))
+        )))
         .await?;
     }
     Ok(())

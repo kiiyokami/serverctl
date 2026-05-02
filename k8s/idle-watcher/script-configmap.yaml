@@ -6,11 +6,6 @@ metadata:
 data:
   watcher.py: |
     #!/usr/bin/env python3
-    """
-    Scales down Minecraft deployments in the games namespace when no players
-    have been online for TTL_SECONDS. Runs every 2 minutes as a CronJob.
-    Idle-since timestamps are tracked in the minecraft-idle-state ConfigMap.
-    """
     import json, os, socket, ssl, struct, time, urllib.request, urllib.error
 
     NAMESPACE = "games"
@@ -67,19 +62,18 @@ data:
 
 
     def mc_player_count(host, port=25565, timeout=5):
-        """Query Minecraft Server List Ping. Returns online player count or None."""
         try:
             with socket.create_connection((host, port), timeout=timeout) as s:
                 host_b = host.encode()
                 handshake = (
-                    varint_encode(0)              # packet id = handshake
-                    + varint_encode(765)          # protocol version (any recent)
+                    varint_encode(0)
+                    + varint_encode(765)
                     + varint_encode(len(host_b)) + host_b
                     + struct.pack(">H", port)
-                    + varint_encode(1)            # next state = status
+                    + varint_encode(1)
                 )
                 s.sendall(varint_encode(len(handshake)) + handshake)
-                s.sendall(b"\x01\x00")  # status request
+                s.sendall(b"\x01\x00")
 
                 data, deadline = b"", time.time() + timeout
                 while time.time() < deadline:
