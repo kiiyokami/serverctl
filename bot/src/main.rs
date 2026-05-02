@@ -10,6 +10,7 @@ mod minecraft;
 mod modrinth;
 mod reply;
 mod values;
+mod watcher;
 
 pub struct Data {}
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -46,6 +47,8 @@ async fn main() -> Result<()> {
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
+            let http = std::sync::Arc::clone(&ctx.http);
+            tokio::spawn(watcher::run(http));
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 Ok(Data {})

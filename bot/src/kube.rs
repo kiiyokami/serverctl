@@ -86,6 +86,28 @@ pub fn guild_id(d: &Deployment) -> Option<String> {
         .cloned()
 }
 
+pub fn channel_id(d: &Deployment) -> Option<String> {
+    d.metadata
+        .annotations
+        .as_ref()?
+        .get("serverctl.io/discord-channel-id")
+        .cloned()
+}
+
+pub async fn patch_channel_id(c: &Client, name: &str, channel_id: &str) -> Result<()> {
+    let api: Api<Deployment> = Api::namespaced(c.clone(), NS);
+    let patch = json!({
+        "metadata": {
+            "annotations": {
+                "serverctl.io/discord-channel-id": channel_id
+            }
+        }
+    });
+    api.patch(name, &PatchParams::default(), &Patch::Merge(patch))
+        .await?;
+    Ok(())
+}
+
 pub fn replicas(d: &Deployment) -> u32 {
     d.spec
         .as_ref()
