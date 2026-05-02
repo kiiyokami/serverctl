@@ -23,6 +23,11 @@ pub async fn delete(
         Err(e) => report.push(format!("⚠️ Helm uninstall: {e}")),
     }
 
+    match k::delete_deployment(&client, &name).await {
+        Ok(()) => report.push("✅ Deployment deleted".to_string()),
+        Err(e) => report.push(format!("⚠️ Deployment delete: {e}")),
+    }
+
     if purge.unwrap_or(false) {
         match k::delete_pvc(&client, &format!("{name}-data")).await {
             Ok(()) => report.push(format!("✅ PVC `{name}-data` deleted (world data wiped)")),

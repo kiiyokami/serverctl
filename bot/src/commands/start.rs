@@ -27,12 +27,7 @@ pub async fn start(
         > 0;
 
     if !already_up {
-        let running: u32 = k::list_deployments(&client)
-            .await?
-            .iter()
-            .map(k::replicas)
-            .filter(|r| *r > 0)
-            .count() as u32;
+        let running = k::running_server_count(&client).await?;
         if running >= MAX_CONCURRENT {
             ctx.send(reply::err(format!(
                 "Already {running}/{MAX_CONCURRENT} servers running. Stop one first."

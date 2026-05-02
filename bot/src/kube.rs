@@ -2,7 +2,7 @@ use anyhow::Result;
 use k8s_openapi::api::apps::v1::Deployment;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use kube::{
-    api::{Api, Patch, PatchParams},
+    api::{Api, DeleteParams, Patch, PatchParams},
     Client,
 };
 use serde_json::json;
@@ -35,11 +35,30 @@ pub async fn scale(c: &Client, name: &str, replicas: u32) -> Result<()> {
     Ok(())
 }
 
+pub async fn running_server_count(c: &Client) -> Result<u32> {
+    Ok(list_deployments(c)
+        .await?
+        .into_iter()
+        .filter(|d| guild_id(d).is_some())
+        .map(|d| replicas(&d))
+        .filter(|r| *r > 0)
+        .count() as u32)
+}
+
+pub async fn delete_deployment(c: &Client, name: &str) -> Result<()> {
+    let api: Api<Deployment> = Api::namespaced(c.clone(), NS);
+    match api.delete(name, &DeleteParams::default()).await {
+        Ok(_) => Ok(()),
+        Err(kube::Error::Api(ae)) if ae.code == 404 => Ok(()),
+        Err(e) => Err(e.into()),
+    }
+}
+
 pub async fn delete_pvc(c: &Client, name: &str) -> Result<()> {
     let api: Api<PersistentVolumeClaim> = Api::namespaced(c.clone(), NS);
     match api.delete(name, &Default::default()).await {
         Ok(_) => Ok(()),
-        Err(kube::Error::Api(ae)) if ae.code == 404 => Ok(()), // already gone
+        Err(kube::Error::Api(ae)) if ae.code == 404 => Ok(()),
         Err(e) => Err(e.into()),
     }
 }
