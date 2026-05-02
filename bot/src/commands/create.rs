@@ -1,4 +1,4 @@
-use crate::{config, helm, kube as k, reply, values, Context, Error};
+use crate::{commands::mods as mods_cmd, config, helm, kube as k, reply, values, Context, Error};
 use poise::ChoiceParameter;
 use std::time::Duration;
 
@@ -27,6 +27,7 @@ pub async fn create(
     ctx: Context<'_>,
     #[description = "Server name (lowercase, no spaces)"] name: String,
     #[description = "Server type"] kind: ServerType,
+    #[description = "Modrinth mod/modpack URL or .jar URL"] mods_url: Option<String>,
 ) -> Result<(), Error> {
     ctx.defer().await?;
     let guild = match ctx.guild_id() {
@@ -54,16 +55,25 @@ pub async fn create(
         return Ok(());
     }
 
-    // Generate config
     let template = values::templates_dir().join(format!("{}.yaml", kind.template_name()));
     let mut v: values::Values = serde_yaml::from_str(&std::fs::read_to_string(&template)?)?;
     v.name = name.clone();
     v.node_port = values::next_free_node_port()?;
     v.discord_guild_id = guild;
+
+    if let Some(ref url) = mods_url {
+        match mods_cmd::apply_mod_url(&mut v, url).await? {
+            mods_cmd::ModResult::Unrecognized => {
+                ctx.send(reply::err("Unrecognized mods URL.")).await?;
+                return Ok(());
+            }
+            _ => {}
+        }
+    }
+
     values::write(&dest, &v)?;
     let public_port = v.node_port - 5000;
 
-    // Concurrent-server limit
     let client = k::client().await?;
     let running = k::running_server_count(&client).await?;
     if running >= MAX_CONCURRENT {
@@ -75,26 +85,30 @@ pub async fn create(
         return Ok(());
     }
 
+    let ver_str = {
+        let mods = v.server.mods.len();
+        let base = format!("{} {}", v.server.kind, v.server.version);
+        if mods > 0 { format!("{base} • {mods} mods") } else { base }
+    };
+
     ctx.send(reply::pending(format!(
-        "Creating `{name}` ({})… this can take up to 10 minutes for modpacks.",
-        kind.name()
+        "🟡 **`{name}`** is starting ({ver_str})\nThis can take up to 10 minutes for modpacks."
     )))
     .await?;
 
-    // Provision + start
     let chart = values::chart_dir();
     helm::upgrade_install(&name, &chart, &dest).await?;
     k::scale(&client, &name, 1).await?;
 
     if k::wait_until_ready(&client, &name, READY_TIMEOUT).await? {
         ctx.send(reply::ok(format!(
-            "✅ `{name}` is ready! Connect at `{}:{public_port}`",
+            "✅ **`{name}`** is ready! ({ver_str})\nConnect: `{}:{public_port}`",
             config::public_domain()
         )))
         .await?;
     } else {
         ctx.send(reply::pending(format!(
-            "⏳ `{name}` is still starting after 10 min. Use `/status {name}` to check."
+            "⏳ **`{name}`** is still starting after 10 min. Use `/status {name}` to check."
         )))
         .await?;
     }

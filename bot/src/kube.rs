@@ -1,4 +1,5 @@
 use anyhow::Result;
+use chrono;
 use k8s_openapi::api::apps::v1::Deployment;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use kube::{
@@ -31,6 +32,20 @@ pub async fn scale(c: &Client, name: &str, replicas: u32) -> Result<()> {
     let api: Api<Deployment> = Api::namespaced(c.clone(), NS);
     let patch = json!({"spec":{"replicas": replicas}});
     api.patch(name, &PatchParams::default(), &Patch::Strategic(patch))
+        .await?;
+    Ok(())
+}
+
+pub async fn patch_ttl(c: &Client, name: &str, ttl_seconds: u32) -> Result<()> {
+    let api: Api<Deployment> = Api::namespaced(c.clone(), NS);
+    let patch = json!({
+        "metadata": {
+            "annotations": {
+                "serverctl.io/ttl-seconds": ttl_seconds.to_string()
+            }
+        }
+    });
+    api.patch(name, &PatchParams::default(), &Patch::Merge(patch))
         .await?;
     Ok(())
 }
@@ -77,6 +92,17 @@ pub fn replicas(d: &Deployment) -> u32 {
         .and_then(|s| s.replicas)
         .unwrap_or(0)
         .max(0) as u32
+}
+
+pub fn uptime_secs(d: &Deployment) -> Option<i64> {
+    let conditions = d.status.as_ref()?.conditions.as_ref()?;
+    let t = conditions
+        .iter()
+        .find(|c| c.type_ == "Available" && c.status == "True")?
+        .last_transition_time
+        .as_ref()?;
+    let now = chrono::Utc::now();
+    Some(now.signed_duration_since(t.0).num_seconds().max(0))
 }
 
 pub fn available_replicas(d: &Deployment) -> u32 {

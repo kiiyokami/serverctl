@@ -1,10 +1,11 @@
-use crate::{config, kube as k, reply, values, Context, Error};
+use crate::{config, kube as k, minecraft, reply, values, Context, Error};
 
 #[poise::command(slash_command)]
 pub async fn status(
     ctx: Context<'_>,
     #[description = "Server name"] name: String,
 ) -> Result<(), Error> {
+    ctx.defer().await?;
     let guild = match ctx.guild_id() {
         Some(g) => g.to_string(),
         None => {
@@ -25,26 +26,48 @@ pub async fn status(
             .await?;
         return Ok(());
     }
+
     let r = k::replicas(&dep);
     let avail = k::available_replicas(&dep);
-    let public_port = values::read(&values::path_for(&name))
-        .ok()
-        .map(|v| v.node_port.saturating_sub(5000))
-        .unwrap_or(0);
+    let v = values::read(&values::path_for(&name)).ok();
+    let node_port = v.as_ref().map(|v| v.node_port).unwrap_or(0);
+    let public_port = node_port.saturating_sub(5000);
+    let version_str = v.as_ref().map(|v| {
+        let kind = &v.server.kind;
+        let ver = &v.server.version;
+        format!("{kind} {ver}")
+    });
 
-    let (reply_fn, msg): (fn(_) -> _, _) = if r == 0 {
-        (reply::info, format!("⚫ `{name}`: stopped"))
-    } else if avail >= 1 {
-        (
-            reply::ok,
-            format!(
-                "🟢 `{name}`: running — connect at `{}:{public_port}`",
-                config::public_domain()
-            ),
-        )
-    } else {
-        (reply::pending, format!("🟡 `{name}`: starting up…"))
-    };
-    ctx.send(reply_fn(msg)).await?;
+    if r == 0 {
+        ctx.send(reply::info(format!("⚫ **`{name}`** — stopped"))).await?;
+        return Ok(());
+    }
+
+    if avail < 1 {
+        ctx.send(reply::pending(format!("🟡 **`{name}`** — starting up…"))).await?;
+        return Ok(());
+    }
+
+    let ping = minecraft::ping(node_port as u16).await;
+    let uptime = k::uptime_secs(&dep);
+
+    let mut lines = vec![format!("🟢 **`{name}`** — running")];
+
+    let mut meta = Vec::new();
+    if let Some(s) = &ping {
+        meta.push(format!("Players: {}/{}", s.online, s.max));
+    }
+    if let Some(secs) = uptime {
+        meta.push(format!("Uptime: {}", minecraft::format_uptime(secs)));
+    }
+    if let Some(v) = &version_str {
+        meta.push(format!("Version: {v}"));
+    }
+    if !meta.is_empty() {
+        lines.push(meta.join(" | "));
+    }
+    lines.push(format!("Connect: `{}:{public_port}`", config::public_domain()));
+
+    ctx.send(reply::ok(lines.join("\n"))).await?;
     Ok(())
 }

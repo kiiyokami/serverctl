@@ -44,25 +44,30 @@ pub async fn start(
     }
     k::scale(&client, &name, 1).await?;
 
+    let v = values::read(&values::path_for(&name)).ok();
+    let node_port = v.as_ref().map(|v| v.node_port).unwrap_or(0);
+    let public_port = node_port.saturating_sub(5000);
+    let ver_str = v.as_ref().map(|v| {
+        let mods = v.server.mods.len();
+        let base = format!("{} {}", v.server.kind, v.server.version);
+        if mods > 0 { format!("{base} • {mods} mods") } else { base }
+    }).unwrap_or_default();
+
     ctx.send(reply::pending(format!(
-        "Starting `{name}`… this can take up to 10 minutes for modpacks."
+        "🟡 **`{name}`** is starting ({ver_str})\nThis can take up to 10 minutes for modpacks."
     )))
     .await?;
 
-    let public_port = values::read(&values::path_for(&name))
-        .ok()
-        .map(|v| v.node_port.saturating_sub(5000))
-        .unwrap_or(0);
-
     if k::wait_until_ready(&client, &name, READY_TIMEOUT).await? {
         ctx.send(reply::ok(format!(
-            "✅ `{name}` is ready! Connect at `{}:{public_port}`",
+            "✅ **`{name}`** is ready! ({})\nConnect: `{}:{public_port}`",
+            ver_str,
             config::public_domain()
         )))
         .await?;
     } else {
         ctx.send(reply::pending(format!(
-            "⏳ `{name}` is still starting after 10 min. Use `/status {name}` to check."
+            "⏳ **`{name}`** is still starting after 10 min. Use `/status {name}` to check."
         )))
         .await?;
     }
