@@ -55,10 +55,13 @@ pub async fn create(
         return Ok(());
     }
 
+    let client = k::client().await?;
+    let used_ports = k::used_node_ports(&client).await?;
+
     let template = values::templates_dir().join(format!("{}.yaml", kind.template_name()));
     let mut v: values::Values = serde_yaml::from_str(&std::fs::read_to_string(&template)?)?;
     v.name = name.clone();
-    v.node_port = values::next_free_node_port()?;
+    v.node_port = values::next_free_node_port(&used_ports)?;
     v.discord_guild_id = guild;
 
     if let Some(ref urls) = mods_url {
@@ -76,7 +79,6 @@ pub async fn create(
     values::write(&dest, &v)?;
     let public_port = v.node_port - 5000;
 
-    let client = k::client().await?;
     let running = k::running_server_count(&client).await?;
     if running >= MAX_CONCURRENT {
         ctx.send(reply::pending(format!(
