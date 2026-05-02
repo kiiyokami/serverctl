@@ -93,7 +93,7 @@ pub async fn create(
         if mods > 0 { format!("{base} • {mods} mods") } else { base }
     };
 
-    ctx.send(reply::pending(format!(
+    let handle = ctx.send(reply::pending(format!(
         "🟡 **`{name}`** is starting ({ver_str})\nThis can take up to 10 minutes for modpacks."
     )))
     .await?;
@@ -101,15 +101,16 @@ pub async fn create(
     let chart = values::chart_dir();
     helm::upgrade_install(&name, &chart, &dest).await?;
     k::scale(&client, &name, 1).await?;
+    let _ = k::patch_channel_id(&client, &name, &ctx.channel_id().to_string()).await;
 
     if k::wait_until_ready(&client, &name, READY_TIMEOUT).await? {
-        ctx.send(reply::ok(format!(
+        handle.edit(ctx, reply::ok(format!(
             "✅ **`{name}`** is ready! ({ver_str})\nConnect: `{}:{public_port}`",
             config::public_domain()
         )))
         .await?;
     } else {
-        ctx.send(reply::pending(format!(
+        handle.edit(ctx, reply::pending(format!(
             "⏳ **`{name}`** is still starting after 10 min. Use `/status {name}` to check."
         )))
         .await?;
