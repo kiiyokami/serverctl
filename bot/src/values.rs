@@ -59,22 +59,6 @@ pub fn path_for(name: &str) -> PathBuf {
     servers_dir().join(format!("{name}.yaml"))
 }
 
-pub fn list_all() -> Result<Vec<Values>> {
-    let mut out = Vec::new();
-    let dir = servers_dir();
-    if !dir.is_dir() {
-        return Ok(out);
-    }
-    for entry in std::fs::read_dir(&dir)? {
-        let p = entry?.path();
-        if p.extension().and_then(|s| s.to_str()) == Some("yaml") {
-            if let Ok(v) = read(&p) {
-                out.push(v);
-            }
-        }
-    }
-    Ok(out)
-}
 
 pub fn read(path: &Path) -> Result<Values> {
     let text = std::fs::read_to_string(path)
@@ -88,9 +72,7 @@ pub fn write(path: &Path, v: &Values) -> Result<()> {
     Ok(())
 }
 
-pub fn next_free_node_port() -> Result<u32> {
-    let used: std::collections::HashSet<u32> =
-        list_all()?.into_iter().map(|v| v.node_port).collect();
+pub fn next_free_node_port(used: &std::collections::HashSet<u32>) -> Result<u32> {
     for port in 30565..=30568 {
         if !used.contains(&port) {
             return Ok(port);

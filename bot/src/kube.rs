@@ -1,7 +1,7 @@
 use anyhow::Result;
 use chrono;
 use k8s_openapi::api::apps::v1::Deployment;
-use k8s_openapi::api::core::v1::PersistentVolumeClaim;
+use k8s_openapi::api::core::v1::{PersistentVolumeClaim, Service};
 use kube::{
     api::{Api, DeleteParams, Patch, PatchParams},
     Client,
@@ -58,6 +58,22 @@ pub async fn running_server_count(c: &Client) -> Result<u32> {
         .map(|d| replicas(&d))
         .filter(|r| *r > 0)
         .count() as u32)
+}
+
+pub async fn used_node_ports(c: &Client) -> Result<std::collections::HashSet<u32>> {
+    let api: Api<Service> = Api::namespaced(c.clone(), NS);
+    let svcs = api.list(&Default::default()).await?.items;
+    let mut ports = std::collections::HashSet::new();
+    for svc in svcs {
+        if let Some(spec) = svc.spec {
+            for p in spec.ports.unwrap_or_default() {
+                if let Some(np) = p.node_port {
+                    ports.insert(np as u32);
+                }
+            }
+        }
+    }
+    Ok(ports)
 }
 
 pub async fn delete_deployment(c: &Client, name: &str) -> Result<()> {
