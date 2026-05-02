@@ -1,9 +1,10 @@
 name: "vanilla-chill"
-nodePort: 30565 
+nodePort: 30565
+image: itzg/minecraft-server:java21
 
 server:
   type: VANILLA
-  version: "LATEST"
+  version: "1.21.4"
   memory: "8G"
   onlineMode: true
   mods: []

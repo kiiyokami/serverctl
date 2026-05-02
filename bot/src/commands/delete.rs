@@ -1,4 +1,4 @@
-use crate::{auth, helm, kube as k, values, Context, Error};
+use crate::{auth, helm, kube as k, reply, values, Context, Error};
 
 #[poise::command(slash_command)]
 pub async fn delete(
@@ -11,7 +11,7 @@ pub async fn delete(
     let guild = ctx.guild_id().map(|g| g.to_string()).unwrap_or_default();
     let client = k::client().await?;
     if !auth::guild_owns(&client, &guild, &name).await? {
-        ctx.say(format!("`{name}` isn't managed by this guild."))
+        ctx.send(reply::err(format!("`{name}` isn't managed by this guild.")))
             .await?;
         return Ok(());
     }
@@ -19,7 +19,7 @@ pub async fn delete(
     let mut report = Vec::new();
 
     match helm::uninstall(&name).await {
-        Ok(()) => report.push(format!("✅ Helm release uninstalled")),
+        Ok(()) => report.push("✅ Helm release uninstalled".to_string()),
         Err(e) => report.push(format!("⚠️ Helm uninstall: {e}")),
     }
 
@@ -30,16 +30,20 @@ pub async fn delete(
         }
         let path = values::path_for(&name);
         match std::fs::remove_file(&path) {
-            Ok(()) => report.push(format!("✅ Local config removed")),
+            Ok(()) => report.push("✅ Local config removed".to_string()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => report.push(format!("⚠️ Config remove: {e}")),
         }
     } else {
-        report.push(format!(
-            "ℹ️ World data preserved. Re-run with `purge:true` to also wipe the PVC."
-        ));
+        report.push(
+            "ℹ️ World data preserved. Re-run with `purge:true` to also wipe the PVC.".to_string(),
+        );
     }
 
-    ctx.say(format!("**`{name}`**\n{}", report.join("\n"))).await?;
+    ctx.send(reply::info(format!(
+        "**`{name}`**\n{}",
+        report.join("\n")
+    )))
+    .await?;
     Ok(())
 }

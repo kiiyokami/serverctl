@@ -1,4 +1,4 @@
-use crate::{auth, kube as k, modrinth, values, Context, Error};
+use crate::{auth, kube as k, modrinth, reply, values, Context, Error};
 use regex::Regex;
 
 #[poise::command(slash_command)]
@@ -11,7 +11,7 @@ pub async fn mods(
     let guild = ctx.guild_id().map(|g| g.to_string()).unwrap_or_default();
     let client = k::client().await?;
     if !auth::guild_owns(&client, &guild, &name).await? {
-        ctx.say(format!("`{name}` isn't managed by this guild."))
+        ctx.send(reply::err(format!("`{name}` isn't managed by this guild.")))
             .await?;
         return Ok(());
     }
@@ -27,9 +27,9 @@ pub async fn mods(
         let extra = v.extra_env.get_or_insert_with(serde_yaml::Mapping::new);
         extra.insert("TYPE".into(), "MODRINTH".into());
         extra.insert("MODRINTH_PROJECT".into(), slug.into());
-        ctx.say(format!(
-            "Configured Modrinth modpack `{slug}` for `{name}`."
-        ))
+        ctx.send(reply::ok(format!(
+            "✅ Configured Modrinth modpack `{slug}` for `{name}`."
+        )))
         .await?;
     } else if let Some(c) = mod_re.captures(&url) {
         let slug = c.get(1).unwrap().as_str();
@@ -39,14 +39,16 @@ pub async fn mods(
         if !v.server.mods.contains(&jar) {
             v.server.mods.push(jar);
         }
-        ctx.say(format!("Added `{slug}` ({vn}) to `{name}`.")).await?;
+        ctx.send(reply::ok(format!("✅ Added `{slug}` ({vn}) to `{name}`.")))
+            .await?;
     } else if url.to_lowercase().ends_with(".jar") {
         if !v.server.mods.contains(&url) {
             v.server.mods.push(url);
         }
-        ctx.say(format!("Added direct mod URL to `{name}`.")).await?;
+        ctx.send(reply::ok(format!("✅ Added direct mod URL to `{name}`.")))
+            .await?;
     } else {
-        ctx.say("Unrecognized URL.").await?;
+        ctx.send(reply::err("Unrecognized URL.")).await?;
         return Ok(());
     }
 

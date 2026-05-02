@@ -1,4 +1,4 @@
-use crate::{config, helm, kube as k, values, Context, Error};
+use crate::{config, helm, kube as k, reply, values, Context, Error};
 use poise::ChoiceParameter;
 use std::time::Duration;
 
@@ -32,7 +32,7 @@ pub async fn create(
     let guild = match ctx.guild_id() {
         Some(g) => g.to_string(),
         None => {
-            ctx.say("Run this in a server.").await?;
+            ctx.send(reply::err("Run this in a server.")).await?;
             return Ok(());
         }
     };
@@ -41,13 +41,16 @@ pub async fn create(
             .chars()
             .any(|c| !c.is_ascii_lowercase() && !c.is_ascii_digit() && c != '-')
     {
-        ctx.say("Name must be lowercase ASCII letters, digits, or hyphens.")
-            .await?;
+        ctx.send(reply::err(
+            "Name must be lowercase ASCII letters, digits, or hyphens.",
+        ))
+        .await?;
         return Ok(());
     }
     let dest = values::path_for(&name);
     if dest.exists() {
-        ctx.say(format!("`{name}` already exists.")).await?;
+        ctx.send(reply::err(format!("`{name}` already exists.")))
+            .await?;
         return Ok(());
     }
 
@@ -69,18 +72,18 @@ pub async fn create(
         .filter(|r| *r > 0)
         .count() as u32;
     if running >= MAX_CONCURRENT {
-        ctx.say(format!(
+        ctx.send(reply::pending(format!(
             "Created `{name}` ({}) but {running}/{MAX_CONCURRENT} servers are already running. Stop one, then `/start {name}`.",
             kind.name()
-        ))
+        )))
         .await?;
         return Ok(());
     }
 
-    ctx.say(format!(
-        "Creating `{name}` ({})... this can take up to 10 minutes for modpacks.",
+    ctx.send(reply::pending(format!(
+        "Creating `{name}` ({})… this can take up to 10 minutes for modpacks.",
         kind.name()
-    ))
+    )))
     .await?;
 
     // Provision + start
@@ -89,15 +92,15 @@ pub async fn create(
     k::scale(&client, &name, 1).await?;
 
     if k::wait_until_ready(&client, &name, READY_TIMEOUT).await? {
-        ctx.say(format!(
+        ctx.send(reply::ok(format!(
             "✅ `{name}` is ready! Connect at `{}:{public_port}`",
             config::public_domain()
-        ))
+        )))
         .await?;
     } else {
-        ctx.say(format!(
+        ctx.send(reply::pending(format!(
             "⏳ `{name}` is still starting after 10 min. Use `/status {name}` to check."
-        ))
+        )))
         .await?;
     }
     Ok(())

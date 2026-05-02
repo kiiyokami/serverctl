@@ -68,8 +68,6 @@ pub fn available_replicas(d: &Deployment) -> u32 {
         .max(0) as u32
 }
 
-/// Poll `get_deployment` until at least one pod is Available, or timeout.
-/// Returns true if ready, false if timed out.
 pub async fn wait_until_ready(
     c: &Client,
     name: &str,
