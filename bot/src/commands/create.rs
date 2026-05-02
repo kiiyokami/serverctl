@@ -61,13 +61,15 @@ pub async fn create(
     v.node_port = values::next_free_node_port()?;
     v.discord_guild_id = guild;
 
-    if let Some(ref url) = mods_url {
-        match mods_cmd::apply_mod_url(&mut v, url).await? {
-            mods_cmd::ModResult::Unrecognized => {
-                ctx.send(reply::err("Unrecognized mods URL.")).await?;
-                return Ok(());
+    if let Some(ref urls) = mods_url {
+        for url in urls.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+            match mods_cmd::apply_mod_url(&mut v, url).await? {
+                mods_cmd::ModResult::Unrecognized => {
+                    ctx.send(reply::err(format!("Unrecognized URL: `{url}`"))).await?;
+                    return Ok(());
+                }
+                _ => {}
             }
-            _ => {}
         }
     }
 
