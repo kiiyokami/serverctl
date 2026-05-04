@@ -14,18 +14,18 @@
 
 All servers live at your domain on different ports (e.g. `mc.example.com:25565`, `mc.example.com:25566`):
 
-| Port | NodePort |
-|------|----------|
-| 25565 | 30565 |
-| 25566 | 30566 |
-| 25567 | 30567 |
-| 25568 | 30568 |
+| Port  | NodePort |
+|-------|----------|
+| 25565 | 30565    |
+| 25566 | 30566    |
+| 25567 | 30567    |
+| 25568 | 30568    |
 
 Server configs live locally in `k8s/helm/values/servers/` (gitignored — each machine manages its own).
 
-At most **2 servers run concurrently** (hardware limit; configurable as `MAX_CONCURRENT` in `scripts/server.sh`). Trying to `start` a third while two are running fails with a list of currently-running servers to stop first.
+At most **2 servers run concurrently** (hardware limit; configurable as `MAX_CONCURRENT` in the bot source). Trying to start a third while two are running is rejected with an explanation.
 
-Servers auto-shut-down after **5 minutes with no players**. The `minecraft-idle-watcher` CronJob checks every 2 minutes via Minecraft's Server List Ping and scales the deployment to 0 when empty. Change the TTL by editing `TTL_SECONDS` in [k8s/idle-watcher/cronjob.yaml](k8s/idle-watcher/cronjob.yaml) and re-running `apply-manifests.sh`.
+Servers auto-shut-down after idle. The `minecraft-idle-watcher` CronJob checks every 2 minutes via Minecraft's Server List Ping and scales the deployment to 0 when empty. The default TTL is 5 minutes; use `/ttl` to override per server.
 
 ## Quick Start
 
@@ -43,103 +43,22 @@ bash scripts/apply-manifests.sh
 
 Creates the `games` namespace and deploys the idle watcher. No Minecraft servers are created yet.
 
-### 3. Create a server
+### 3. Set up the Discord bot
 
-```bash
-bash scripts/server.sh create
-```
+1. Create a Discord application + bot at https://discord.com/developers/applications, copy the bot token.
+2. Copy the secret template and fill in your token:
+   ```bash
+   cp k8s/discord-bot/secret-template.yaml k8s/discord-bot/secret.yaml
+   $EDITOR k8s/discord-bot/secret.yaml
+   ```
+3. Edit `k8s/discord-bot/deployment.yaml` — replace the `REPLACE_ME` placeholder in `hostPath.path` with the absolute path of this repo on your home server.
+4. Build and install:
+   ```bash
+   bash scripts/install-bot.sh
+   ```
+5. Invite the bot to your Discord with the `applications.commands` and `bot` scopes.
 
-Prompts for:
-- **Name** — used as the world identifier and Helm release name (lowercase, no spaces)
-- **Type** — Vanilla, Fabric, or Forge
-
-Auto-picks the next free NodePort, generates the config in `k8s/helm/values/servers/<name>.yaml`, and offers to start it immediately.
-
-### 4. Add a mod or modpack (optional)
-
-```bash
-# Modrinth modpack
-bash scripts/server.sh mods <name> https://modrinth.com/modpack/cobbleverse
-
-# Modrinth single mod (auto-resolves the version matching your server's MC version)
-bash scripts/server.sh mods <name> https://modrinth.com/mod/lithium
-
-# CurseForge modpack (requires CF_API_KEY — see below)
-bash scripts/server.sh mods <name> https://www.curseforge.com/minecraft/modpacks/all-the-mods-9
-
-# Direct JAR URL
-bash scripts/server.sh mods <name> https://example.com/path/to/mod.jar
-```
-
-If the server is already deployed, the script prompts to apply via `helm upgrade` (Kubernetes rolls the pod automatically).
-
-### 5. Start, stop, status
-
-```bash
-bash scripts/server.sh start <name>     # provisions on first run, then scales to 1
-bash scripts/server.sh stop <name>      # scales to 0 (world data preserved)
-bash scripts/server.sh status <name>    # show deployment + pod state
-bash scripts/server.sh list             # all servers in the games namespace
-```
-
-### 6. Delete a server
-
-```bash
-bash scripts/server.sh delete <name>          # uninstall Helm release (PVC kept)
-bash scripts/server.sh delete <name> --purge  # also wipe world data + local config
-```
-
-`--purge` requires you to type the server name to confirm.
-
-## Server Configuration
-
-Each server's `k8s/helm/values/servers/<name>.yaml` controls everything:
-
-```yaml
-name: "my-server"
-nodePort: 30565
-
-# Container image — pick one to match your mod/loader:
-#   itzg/minecraft-server:latest   — newest Java (currently 25)
-#   itzg/minecraft-server:java21   — Java 21 (most 1.20+ mods)
-#   itzg/minecraft-server:java17   — Java 17 (1.17–1.20)
-image: itzg/minecraft-server:java21
-
-server:
-  type: FABRIC                  # VANILLA | FABRIC | FORGE
-  version: "1.21.1"             # Pin a specific MC version. Avoid LATEST — newer
-                                # MC may need newer Java than your image provides.
-  memory: "8G"
-  onlineMode: true
-  mods: []                      # individual mod JAR URLs (managed by `server.sh mods`)
-
-resources:
-  requests: { memory: "8Gi", cpu: "1" }
-  limits:   { memory: "12Gi", cpu: "4" }
-
-storage: 40Gi
-
-# Extra env vars passed straight to itzg/minecraft-server. Used by `server.sh mods`
-# to set TYPE=MODRINTH/MODRINTH_PROJECT for modpacks. Also useful for tunables like
-# JVM_OPTS, MOTD, MAX_PLAYERS, etc.
-extraEnv:
-  JVM_OPTS: "-XX:+UseZGC -XX:+ZGenerational"
-```
-
-### CurseForge API key
-
-CurseForge modpacks require an API key. Get one at https://console.curseforge.com/, then add it to the values file:
-
-```yaml
-extraEnv:
-  TYPE: AUTO_CURSEFORGE
-  CF_SLUG: <pack-slug>
-  CF_API_KEY: "<your-key>"
-```
-
-The `servers/` directory is gitignored, so the key stays local.
-
-## Configure nginx on the VPS (one-time setup)
+### 4. Configure nginx on the VPS (one-time setup)
 
 Copy `nginx/minecraft-stream.conf` to the VPS, replacing `<WG_HOME_IP>` with your home server's WireGuard IP:
 
@@ -164,38 +83,90 @@ stream {
 }
 ```
 
-## Discord Bot (optional)
+## Discord Bot Commands
 
-Rust bot that exposes server lifecycle as slash commands. Servers are scoped per Discord guild — each guild only sees and manages servers it created. Servers created via `scripts/server.sh` directly (no `discordGuildId`) are invisible to the bot.
+All server management is done through Discord slash commands. Servers are scoped per guild — each guild only sees and manages servers it created.
 
-### Setup
+### `/create <name> <type> [mods_url]`
 
-1. Create a Discord application + bot at https://discord.com/developers/applications, copy the bot token.
-2. Copy the secret template and fill in your token:
-   ```bash
-   cp k8s/discord-bot/secret-template.yaml k8s/discord-bot/secret.yaml
-   $EDITOR k8s/discord-bot/secret.yaml
-   ```
-3. Edit `k8s/discord-bot/deployment.yaml` — replace the `REPLACE_ME` placeholder in `hostPath.path` with the absolute path of this repo on your home server.
-4. Build and install:
-   ```bash
-   bash scripts/install-bot.sh
-   ```
-5. Invite the bot to your Discord with the `applications.commands` and `bot` scopes.
+Creates and starts a server. `mods_url` accepts a single URL or multiple comma-separated URLs:
 
-### Commands
+- Modrinth modpack: `https://modrinth.com/modpack/cobbleverse`
+- Modrinth mod: `https://modrinth.com/mod/lithium`
+- Direct JAR: `https://example.com/mod.jar`
+- Multiple: `https://modrinth.com/mod/lithium,https://modrinth.com/mod/sodium`
 
-`/create <name> <type>`, `/list`, `/status <name>`, `/start <name>`, `/stop <name>`, `/delete <name> [purge:true]`, `/mods <name> <url>`
+The bot replies with a "starting" embed that updates in-place to "ready" when the server is up, including the connect address.
 
-`MAX_CONCURRENT=2` is enforced in `/start` (matches the host script).
+### `/start <name>`
+
+Starts a stopped server. Updates in-place from "starting" to "ready".
+
+### `/stop <name>`
+
+Scales the server to 0. World data is preserved.
+
+### `/status <name>`
+
+Shows current state with player count, uptime, version, and connect address.
+
+### `/list`
+
+Lists all servers in the guild with their status, player count, uptime, and version.
+
+### `/mods <name> <url>`
+
+Adds a mod or modpack to an existing server. Accepts comma-separated URLs. Takes effect on next start.
+
+### `/ttl <name> <minutes>`
+
+Sets the idle-shutdown timeout for a specific server. Set to `0` to disable auto-shutdown. Default is 5 minutes.
+
+### `/delete <name> [purge]`
+
+Removes the server. Without `purge`, world data (PVC) is kept. With `purge: true`, everything including the world is deleted.
+
+## Server Configuration
+
+Each server's `k8s/helm/values/servers/<name>.yaml` controls everything:
+
+```yaml
+name: "my-server"
+nodePort: 30565
+
+# Container image — pick one to match your mod/loader:
+#   itzg/minecraft-server:latest   — newest Java (currently 25)
+#   itzg/minecraft-server:java21   — Java 21 (most 1.20+ mods)
+#   itzg/minecraft-server:java17   — Java 17 (1.17–1.20)
+image: itzg/minecraft-server:java21
+
+server:
+  type: FABRIC                  # VANILLA | FABRIC | FORGE
+  version: "1.21.1"             # Pin a specific MC version. Avoid LATEST — newer
+                                # MC may need newer Java than your image provides.
+  memory: "8G"
+  onlineMode: true
+  mods: []                      # individual mod JAR URLs (managed by /mods)
+
+resources:
+  requests: { memory: "8Gi", cpu: "1" }
+  limits:   { memory: "12Gi", cpu: "4" }
+
+storage: 40Gi
+
+# Extra env vars passed straight to itzg/minecraft-server.
+# Used for modpacks (TYPE=MODRINTH, MODRINTH_PROJECT) and tunables like MOTD, MAX_PLAYERS, etc.
+extraEnv:
+  JVM_OPTS: "-XX:+UseZGC -XX:+ZGenerational"
+```
 
 ## DNS (one-time setup)
 
 One A record covers all servers — they share the domain, just different ports.
 
-| Host | Type | Value |
-|------|------|-------|
-| mc | A | `<VPS_PUBLIC_IP>` |
+| Host | Type | Value              |
+|------|------|--------------------|
+| mc   | A    | `<VPS_PUBLIC_IP>`  |
 
 ## Tips
 
@@ -203,8 +174,10 @@ One A record covers all servers — they share the domain, just different ports.
   ```bash
   export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
   ```
-- **Modpacks take time to boot.** First start can run 5–10 minutes while it downloads the modpack and generates dimensions. The startup probe gives it up to 10 minutes before the pod is considered failed.
-- **World data persists** across stops, deletes (without `--purge`), and pod restarts via the PVC.
+- **Modpacks take time to boot.** First start can run 5–10 minutes while the modpack downloads and dimensions generate. The bot's "starting" message updates in-place when it's actually ready.
+- **Java version matters.** Minecraft 1.21.5+ requires Java 25. Use `itzg/minecraft-server:java21` for 1.21.4 and below.
+- **World data persists** across stops, deletes (without `purge`), and pod restarts via the PVC.
+- **Idle shutdown is per-server.** Use `/ttl <name> 0` to keep a server running indefinitely.
 
 ## Verification
 
