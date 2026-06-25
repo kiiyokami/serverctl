@@ -1,5 +1,6 @@
 use crate::{commands::mods as mods_cmd, config, helm, kube as k, reply, values, Context, Error};
 use poise::ChoiceParameter;
+use regex::Regex;
 use std::time::Duration;
 
 const MAX_CONCURRENT: u32 = 2;
@@ -27,6 +28,8 @@ pub async fn create(
     ctx: Context<'_>,
     #[description = "Server name (lowercase, no spaces)"] name: String,
     #[description = "Server type"] kind: ServerType,
+    #[description = "Minecraft version (e.g. 1.20.1). Defaults to the type's pinned version."]
+    mc_version: Option<String>,
     #[description = "Modrinth/CurseForge mod or modpack URL, or .jar URL"] mods_url: Option<String>,
 ) -> Result<(), Error> {
     ctx.defer().await?;
@@ -63,6 +66,18 @@ pub async fn create(
     v.name = name.clone();
     v.node_port = values::next_free_node_port(&used_ports)?;
     v.discord_guild_id = guild;
+
+    if let Some(ref ver) = mc_version {
+        let ver = ver.trim();
+        if !Regex::new(r"^\d+\.\d+(\.\d+)?$")?.is_match(ver) {
+            ctx.send(reply::err(format!(
+                "`{ver}` isn't a valid Minecraft version (e.g. `1.20.1`)."
+            )))
+            .await?;
+            return Ok(());
+        }
+        v.server.version = ver.to_string();
+    }
 
     if let Some(ref urls) = mods_url {
         let user_id = ctx.author().id.to_string();
