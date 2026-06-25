@@ -46,12 +46,13 @@ All server management is done through Discord slash commands. Servers are scoped
 
 | Command | Description |
 |---------|-------------|
-| `/create <name> <type> [mods_url]` | Create and start a server. `mods_url` accepts comma-separated Modrinth or direct JAR URLs. |
+| `/create <name> <type> [mods_url]` | Create and start a server. `mods_url` accepts comma-separated Modrinth, CurseForge, or direct JAR URLs. |
 | `/start <name>` | Start a stopped server. |
 | `/stop <name>` | Stop a running server (world data preserved). |
 | `/status <name>` | Show player count, uptime, version, and connect address. |
 | `/list` | List all servers in the guild. |
-| `/mods <name> <url>` | Add a mod or modpack (comma-separated URLs). Takes effect on next start. |
+| `/mods <name> <url>` | Add a mod or modpack (comma-separated Modrinth/CurseForge/JAR URLs). Takes effect on next start. |
+| `/curseforge-key <key>` | Save your personal CurseForge API key (required for CurseForge packs/mods). Get one at [legacy.curseforge.com/account/api-tokens](https://legacy.curseforge.com/account/api-tokens). |
 | `/ttl <name> <minutes>` | Set idle-shutdown timeout. `0` disables auto-shutdown. |
 | `/delete <name> [purge]` | Delete a server. `purge: true` also wipes world data. |
 

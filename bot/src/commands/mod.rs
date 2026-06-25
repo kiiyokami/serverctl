@@ -1,4 +1,5 @@
 pub mod create;
+pub mod curseforge_key;
 pub mod delete;
 pub mod list;
 pub mod mods;

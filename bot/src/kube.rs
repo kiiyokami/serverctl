@@ -1,14 +1,17 @@
 use anyhow::Result;
 use chrono;
 use k8s_openapi::api::apps::v1::Deployment;
-use k8s_openapi::api::core::v1::{PersistentVolumeClaim, Service};
+use k8s_openapi::api::core::v1::{PersistentVolumeClaim, Secret, Service};
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use kube::{
-    api::{Api, DeleteParams, Patch, PatchParams},
+    api::{Api, DeleteParams, Patch, PatchParams, PostParams},
     Client,
 };
 use serde_json::json;
+use std::collections::BTreeMap;
 
 const NS: &str = "games";
+const CF_KEYS_SECRET: &str = "curseforge-keys";
 
 pub async fn client() -> Result<Client> {
     Ok(Client::try_default().await?)
@@ -90,6 +93,46 @@ pub async fn delete_pvc(c: &Client, name: &str) -> Result<()> {
     match api.delete(name, &Default::default()).await {
         Ok(_) => Ok(()),
         Err(kube::Error::Api(ae)) if ae.code == 404 => Ok(()),
+        Err(e) => Err(e.into()),
+    }
+}
+
+pub async fn get_curseforge_key(c: &Client, user_id: &str) -> Result<Option<String>> {
+    let api: Api<Secret> = Api::namespaced(c.clone(), NS);
+    match api.get(CF_KEYS_SECRET).await {
+        Ok(s) => match s.data.and_then(|d| d.get(user_id).cloned()) {
+            Some(bytes) => Ok(Some(String::from_utf8(bytes.0)?)),
+            None => Ok(None),
+        },
+        Err(kube::Error::Api(ae)) if ae.code == 404 => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+
+pub async fn set_curseforge_key(c: &Client, user_id: &str, key: &str) -> Result<()> {
+    let api: Api<Secret> = Api::namespaced(c.clone(), NS);
+    let patch = json!({ "stringData": { user_id: key } });
+    match api
+        .patch(CF_KEYS_SECRET, &PatchParams::default(), &Patch::Merge(&patch))
+        .await
+    {
+        Ok(_) => Ok(()),
+        Err(kube::Error::Api(ae)) if ae.code == 404 => {
+            let mut sd = BTreeMap::new();
+            sd.insert(user_id.to_string(), key.to_string());
+            let secret = Secret {
+                metadata: ObjectMeta {
+                    name: Some(CF_KEYS_SECRET.to_string()),
+                    namespace: Some(NS.to_string()),
+                    ..Default::default()
+                },
+                string_data: Some(sd),
+                ..Default::default()
+            };
+            api.create(&PostParams::default(), &secret).await?;
+            Ok(())
+        }
         Err(e) => Err(e.into()),
     }
 }

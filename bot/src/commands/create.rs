@@ -27,7 +27,7 @@ pub async fn create(
     ctx: Context<'_>,
     #[description = "Server name (lowercase, no spaces)"] name: String,
     #[description = "Server type"] kind: ServerType,
-    #[description = "Modrinth mod/modpack URL or .jar URL"] mods_url: Option<String>,
+    #[description = "Modrinth/CurseForge mod or modpack URL, or .jar URL"] mods_url: Option<String>,
 ) -> Result<(), Error> {
     ctx.defer().await?;
     let guild = match ctx.guild_id() {
@@ -65,14 +65,10 @@ pub async fn create(
     v.discord_guild_id = guild;
 
     if let Some(ref urls) = mods_url {
-        for url in urls.split(',').map(str::trim).filter(|s| !s.is_empty()) {
-            match mods_cmd::apply_mod_url(&mut v, url).await? {
-                mods_cmd::ModResult::Unrecognized => {
-                    ctx.send(reply::err(format!("Unrecognized URL: `{url}`"))).await?;
-                    return Ok(());
-                }
-                _ => {}
-            }
+        let user_id = ctx.author().id.to_string();
+        if let Err(msg) = mods_cmd::apply_mod_urls(&mut v, &client, &user_id, urls).await? {
+            ctx.send(reply::err(msg)).await?;
+            return Ok(());
         }
     }
 
