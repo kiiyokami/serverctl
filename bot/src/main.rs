@@ -42,6 +42,7 @@ async fn main() -> Result<()> {
                 commands::create::create(),
                 commands::delete::delete(),
                 commands::mods::mods(),
+                commands::curseforge_key::curseforge_key(),
                 commands::ttl::ttl(),
             ],
             ..Default::default()

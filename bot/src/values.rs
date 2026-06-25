@@ -18,6 +18,9 @@ pub struct Values {
     pub storage: Option<serde_yaml::Value>,
     #[serde(rename = "extraEnv", default, skip_serializing_if = "Option::is_none")]
     pub extra_env: Option<serde_yaml::Mapping>,
+    /// Discord user ID whose stored CurseForge key the server uses (secret key name).
+    #[serde(rename = "cfApiKeyUser", default, skip_serializing_if = "Option::is_none")]
+    pub cf_api_key_user: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +33,9 @@ pub struct ServerConfig {
     pub online_mode: bool,
     #[serde(default)]
     pub mods: Vec<String>,
+    
+    #[serde(rename = "curseforgeFiles", default, skip_serializing_if = "Vec::is_empty")]
+    pub cf_files: Vec<String>,
 }
 
 fn default_image() -> String {

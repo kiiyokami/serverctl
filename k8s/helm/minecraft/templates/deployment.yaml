@@ -50,6 +50,17 @@ spec:
             - name: MODS
               value: {{ .Values.server.mods | join "," | quote }}
             {{- end }}
+            {{- if and .Values.server.curseforgeFiles (not (hasKey $extra "CURSEFORGE_FILES")) }}
+            - name: CURSEFORGE_FILES
+              value: {{ .Values.server.curseforgeFiles | join "," | quote }}
+            {{- end }}
+            {{- if .Values.cfApiKeyUser }}
+            - name: CF_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: curseforge-keys
+                  key: {{ .Values.cfApiKeyUser | quote }}
+            {{- end }}
             {{- range $k, $v := $extra }}
             - name: {{ $k }}
               value: {{ $v | quote }}
