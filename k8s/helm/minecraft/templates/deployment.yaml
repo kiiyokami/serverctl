@@ -19,6 +19,42 @@ spec:
     spec:
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
+      {{- if .Values.cfApiKeyUser }}
+      initContainers:
+        # Before itzg runs the (API-heavy) CurseForge install, wait until the
+        # CurseForge API is reachable/un-throttled, with exponential backoff.
+        # This stops the pod from re-hammering the API on restart after a 403/
+        # rate-limit, while itzg resumes from the cached /data on the next pass.
+        - name: cf-ratelimit-gate
+          image: {{ .Values.image | default "itzg/minecraft-server:latest" }}
+          command: ["bash", "-c"]
+          env:
+            - name: CF_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: curseforge-keys
+                  key: {{ .Values.cfApiKeyUser | quote }}
+            {{- if and .Values.extraEnv (hasKey (.Values.extraEnv | default dict) "CF_PAGE_URL") }}
+            - name: CF_PAGE_URL
+              value: {{ index .Values.extraEnv "CF_PAGE_URL" | quote }}
+            {{- end }}
+          args:
+            - |
+              set -u
+              slug="${CF_PAGE_URL##*/}"
+              if [ -z "${slug:-}" ]; then echo "[cf-gate] no CF_PAGE_URL slug; skipping"; exit 0; fi
+              url="https://api.curseforge.com/v1/mods/search?gameId=432&slug=${slug}"
+              i=0
+              while :; do
+                code=$(curl -s -o /dev/null -w '%{http_code}' -H "x-api-key: ${CF_API_KEY}" "$url")
+                if [ "$code" = "200" ]; then echo "[cf-gate] CurseForge API ready"; exit 0; fi
+                i=$((i + 1))
+                if [ "$i" -ge 8 ]; then echo "[cf-gate] API still $code after $i tries; proceeding anyway"; exit 0; fi
+                d=$((i * 30)); [ "$d" -gt 300 ] && d=300
+                echo "[cf-gate] API returned $code (try $i); backing off ${d}s"
+                sleep "$d"
+              done
+      {{- end }}
       containers:
         - name: minecraft
           image: {{ .Values.image | default "itzg/minecraft-server:latest" }}
