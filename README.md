@@ -52,7 +52,7 @@ All server management is done through Discord slash commands. Servers are scoped
 | `/status <name>` | Show player count, uptime, version, and connect address. |
 | `/list` | List all servers in the guild. |
 | `/mods <name> <url>` | Add a mod or modpack (comma-separated Modrinth/CurseForge/JAR URLs). Takes effect on next start. |
-| `/curseforge-key <key>` | Save your personal CurseForge API key (required for CurseForge packs/mods). Get one at [legacy.curseforge.com/account/api-tokens](https://legacy.curseforge.com/account/api-tokens). |
+| `/curseforge-key <key>` | Save your personal CurseForge API key (required for CurseForge packs/mods). Get one at [console.curseforge.com](https://console.curseforge.com/) — it starts with `$2a$10$`. |
 | `/ttl <name> <minutes>` | Set idle-shutdown timeout. `0` disables auto-shutdown. |
 | `/delete <name> [purge]` | Delete a server. `purge: true` also wipes world data. |
 

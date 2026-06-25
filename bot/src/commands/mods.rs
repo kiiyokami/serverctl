@@ -108,7 +108,7 @@ pub async fn apply_mod_urls(
     if needs_cf_key && k::get_curseforge_key(client, user_id).await?.is_none() {
         return Ok(Err(
             "You haven't set a CurseForge API key yet. Run `/curseforge-key` first \
-             (get one at <https://legacy.curseforge.com/account/api-tokens>)."
+             (get one at <https://console.curseforge.com/>)."
                 .into(),
         ));
     }
