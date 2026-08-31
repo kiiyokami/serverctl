@@ -76,7 +76,7 @@ pub async fn create(
             .await?;
             return Ok(());
         }
-        v.server.version = ver.to_string();
+        values::apply_mc_version(&mut v, ver);
     }
 
     if let Some(ref urls) = mods_url {

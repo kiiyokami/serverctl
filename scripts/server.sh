@@ -14,6 +14,25 @@ MAX_CONCURRENT=2
 CMD="${1:-}"
 SERVER="${2:-}"
 
+# Mirror of java_image_for() in bot/src/values.rs — keep the two in sync.
+java_image_for() {
+    local major minor patch
+    IFS=. read -r major minor patch <<< "$1"
+    patch="${patch:-0}"
+    if [[ ! "$major" =~ ^[0-9]+$ || ! "${minor:-}" =~ ^[0-9]+$ || ! "$patch" =~ ^[0-9]+$ ]]; then
+        echo "itzg/minecraft-server:java21"; return
+    fi
+    local tag=java21
+    if [[ "$major" -eq 1 ]]; then
+        if   [[ "$minor" -le 16 ]]; then tag=java8
+        elif [[ "$minor" -eq 17 ]]; then tag=java16
+        elif [[ "$minor" -le 19 ]]; then tag=java17
+        elif [[ "$minor" -eq 20 && "$patch" -le 4 ]]; then tag=java17
+        fi
+    fi
+    echo "itzg/minecraft-server:$tag"
+}
+
 usage() {
     echo "Usage: $0 <create|start|stop|status|list|delete|mods> [args]"
     echo ""
@@ -78,12 +97,36 @@ case "$CMD" in
         fi
         PUBLIC_PORT=$((NODE_PORT - 5000))
 
+        # Minecraft version — picks the matching Java image automatically
+        TEMPLATE_VERSION=$(grep -oP '^\s+version:\s*"\K[^"]+' "$TEMPLATES/$SERVER_TYPE.yaml")
+        echo ""
+        read -rp "Minecraft version [$TEMPLATE_VERSION]: " MC_VERSION
+        MC_VERSION="${MC_VERSION:-$TEMPLATE_VERSION}"
+        if [[ ! "$MC_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "ERROR: '$MC_VERSION' isn't a valid Minecraft version (e.g. 1.20.1)."
+            exit 1
+        fi
+        IMAGE=$(java_image_for "$MC_VERSION")
+
         # Generate values file
         mkdir -p "$VALUES"
         sed \
             -e "s/^name:.*/name: \"$SERVER_NAME\"/" \
             -e "s/^nodePort:.*/nodePort: $NODE_PORT/" \
+            -e "s|^image:.*|image: $IMAGE|" \
+            -e "s/^\(\s*\)version:.*/\1version: \"$MC_VERSION\"/" \
             "$TEMPLATES/$SERVER_TYPE.yaml" > "$VALUES/$SERVER_NAME.yaml"
+
+        # The templates' ZGC JVM_OPTS only exist on Java 21 — strip for older JVMs
+        if [[ "$IMAGE" != *:java21 ]]; then
+            sed -i '/JVM_OPTS:.*ZGC/d' "$VALUES/$SERVER_NAME.yaml"
+            # Drop a now-empty extraEnv block
+            if [[ "$(tail -1 "$VALUES/$SERVER_NAME.yaml")" == "extraEnv:" ]]; then
+                sed -i '/^extraEnv:$/d' "$VALUES/$SERVER_NAME.yaml"
+            fi
+        fi
+
+        echo "  Image: $IMAGE"
 
         echo ""
         echo "  Created: $VALUES/$SERVER_NAME.yaml"
