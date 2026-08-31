@@ -10,6 +10,9 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
+      # No retries: a failed run is superseded by the next 2-minute tick,
+      # and each retry leaves another Error pod behind.
+      backoffLimit: 0
       template:
         spec:
           serviceAccountName: minecraft-idle-watcher

@@ -9,6 +9,10 @@ metadata:
   {{- end }}
 spec:
   replicas: {{ .Values.replicas }}
+  # hostNetwork + a ReadWriteOnce PVC mean old and new pods can never coexist,
+  # so RollingUpdate deadlocks (new pod Pending forever). Kill-then-replace.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: {{ .Values.name }}
