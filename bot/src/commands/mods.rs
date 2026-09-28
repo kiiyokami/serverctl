@@ -29,6 +29,17 @@ pub async fn apply_mod_url(
     let cf_mod_re =
         Regex::new(r"^https?://(?:www\.|legacy\.)?curseforge\.com/minecraft/mc-mods/([^/?#]+)")?;
 
+    // Paper loads plugins from /plugins; jars sent through MODS land in
+    // /data/mods, which Paper never reads.
+    let is_mod_url = mod_re.is_match(url)
+        || cf_mod_re.is_match(url)
+        || url.to_lowercase().ends_with(".jar");
+    if is_mod_url && v.server.kind.eq_ignore_ascii_case("paper") {
+        return Ok(ModResult::Rejected(
+            "Paper servers run plugins, not mods — plugin URLs aren't supported yet.".into(),
+        ));
+    }
+
     if let Some(c) = modpack_re.captures(url) {
         let slug = c.get(1).unwrap().as_str().to_string();
         let extra = v.extra_env.get_or_insert_with(serde_yaml::Mapping::new);
@@ -219,6 +230,22 @@ mod tests {
         assert!(matches!(r, ModResult::Rejected(_)));
         assert!(v.server.cf_files.is_empty());
         assert!(v.cf_api_key_user.is_none());
+    }
+
+    #[tokio::test]
+    async fn mods_rejected_on_paper() {
+        for url in [
+            "https://modrinth.com/mod/sodium",
+            "https://www.curseforge.com/minecraft/mc-mods/jei",
+            "https://example.com/some-mod.jar",
+        ] {
+            let mut v = base_values("PAPER");
+            let r = apply_mod_url(&mut v, url, "42").await.unwrap();
+            assert!(matches!(r, ModResult::Rejected(_)), "{url} should be rejected");
+            assert!(v.server.mods.is_empty());
+            assert!(v.server.cf_files.is_empty());
+            assert!(v.cf_api_key_user.is_none());
+        }
     }
 
     #[tokio::test]

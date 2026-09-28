@@ -56,26 +56,31 @@ pub fn java_image_for(version: &str) -> String {
         (Some(1), Some(17)) => "java16",
         (Some(1), Some(m)) if m <= 19 => "java17",
         (Some(1), Some(20)) if patch <= 4 => "java17",
+        (Some(y), Some(_)) if y >= 26 => "java25",
         _ => "java21",
     };
     format!("itzg/minecraft-server:{tag}")
 }
 
 /// Set the server version and matching Java image. The templates' ZGC
-/// JVM_OPTS only exist on Java 21, so drop them for any older image.
+/// JVM_OPTS use -XX:+ZGenerational, which only Java 21 accepts: Java 25
+/// removed the flag (generational is the only mode), and pre-21 JVMs
+/// either lack it or lack ZGC entirely.
 pub fn apply_mc_version(v: &mut Values, version: &str) {
     v.server.version = version.to_string();
     v.image = java_image_for(version);
-    if !v.image.ends_with(":java21") {
-        if let Some(extra) = v.extra_env.as_mut() {
-            let is_zgc = extra
-                .get("JVM_OPTS")
-                .and_then(|o| o.as_str())
-                .is_some_and(|o| o.contains("ZGC"));
-            if is_zgc {
-                extra.remove("JVM_OPTS");
-            }
-        }
+    let Some(extra) = v.extra_env.as_mut() else { return };
+    let is_zgc = extra
+        .get("JVM_OPTS")
+        .and_then(|o| o.as_str())
+        .is_some_and(|o| o.contains("ZGC"));
+    if !is_zgc || v.image.ends_with(":java21") {
+        return;
+    }
+    if v.image.ends_with(":java25") {
+        extra.insert("JVM_OPTS".into(), "-XX:+UseZGC".into());
+    } else {
+        extra.remove("JVM_OPTS");
     }
 }
 fn default_true() -> bool {
@@ -181,6 +186,23 @@ mod tests {
         apply_mc_version(&mut v, "1.21.1");
         assert_eq!(v.image, "itzg/minecraft-server:java21");
         assert!(v.extra_env.as_ref().unwrap().contains_key("JVM_OPTS"));
+    }
+
+    #[test]
+    fn year_based_versions_get_java25() {
+        assert_eq!(java_image_for("26.1"), "itzg/minecraft-server:java25");
+        assert_eq!(java_image_for("26.1.2"), "itzg/minecraft-server:java25");
+        assert_eq!(java_image_for("27.1"), "itzg/minecraft-server:java25");
+    }
+
+    #[test]
+    fn apply_mc_version_drops_zgenerational_on_java25() {
+        let mut v = values_with_jvm_opts("1.21.1");
+        apply_mc_version(&mut v, "26.1");
+        assert_eq!(v.image, "itzg/minecraft-server:java25");
+        let extra = v.extra_env.as_ref().unwrap();
+        assert_eq!(extra.get("JVM_OPTS").unwrap().as_str(), Some("-XX:+UseZGC"));
+        assert!(extra.contains_key("OTHER"));
     }
 
     #[test]

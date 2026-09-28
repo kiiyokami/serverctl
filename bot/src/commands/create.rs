@@ -11,6 +11,7 @@ pub enum ServerType {
     Vanilla,
     Fabric,
     Forge,
+    Paper,
 }
 
 impl ServerType {
@@ -19,6 +20,7 @@ impl ServerType {
             Self::Vanilla => "vanilla",
             Self::Fabric => "fabric",
             Self::Forge => "forge",
+            Self::Paper => "paper",
         }
     }
 }

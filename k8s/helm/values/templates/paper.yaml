@@ -1,0 +1,23 @@
+name: ""
+nodePort: 30565
+image: itzg/minecraft-server:java21
+
+server:
+  type: PAPER
+  version: "1.21.4"
+  memory: "8G"
+  onlineMode: true
+  mods: []
+
+resources:
+  requests:
+    memory: "8Gi"
+    cpu: "2"
+  limits:
+    memory: "10Gi"
+    cpu: "8"
+
+storage: 20Gi
+
+extraEnv:
+  JVM_OPTS: "-XX:+UseZGC -XX:+ZGenerational"

@@ -23,7 +23,9 @@ java_image_for() {
         echo "itzg/minecraft-server:java21"; return
     fi
     local tag=java21
-    if [[ "$major" -eq 1 ]]; then
+    if [[ "$major" -ge 26 ]]; then
+        tag=java25
+    elif [[ "$major" -eq 1 ]]; then
         if   [[ "$minor" -le 16 ]]; then tag=java8
         elif [[ "$minor" -eq 17 ]]; then tag=java16
         elif [[ "$minor" -le 19 ]]; then tag=java17
@@ -72,11 +74,13 @@ case "$CMD" in
         echo "  1) Vanilla"
         echo "  2) Fabric"
         echo "  3) Forge"
-        read -rp "Choice [1-3]: " TYPE_CHOICE
+        echo "  4) Paper"
+        read -rp "Choice [1-4]: " TYPE_CHOICE
         case "$TYPE_CHOICE" in
             1) SERVER_TYPE=vanilla ;;
             2) SERVER_TYPE=fabric ;;
             3) SERVER_TYPE=forge ;;
+            4) SERVER_TYPE=paper ;;
             *) echo "ERROR: Invalid choice."; exit 1 ;;
         esac
 
@@ -117,8 +121,11 @@ case "$CMD" in
             -e "s/^\(\s*\)version:.*/\1version: \"$MC_VERSION\"/" \
             "$TEMPLATES/$SERVER_TYPE.yaml" > "$VALUES/$SERVER_NAME.yaml"
 
-        # The templates' ZGC JVM_OPTS only exist on Java 21 — strip for older JVMs
-        if [[ "$IMAGE" != *:java21 ]]; then
+        # The templates' JVM_OPTS use -XX:+ZGenerational, which only Java 21 accepts:
+        # Java 25 removed the flag (generational is the only ZGC mode), older JVMs lack it
+        if [[ "$IMAGE" == *:java25 ]]; then
+            sed -i 's/^\(\s*\)JVM_OPTS:.*ZGC.*/\1JVM_OPTS: "-XX:+UseZGC"/' "$VALUES/$SERVER_NAME.yaml"
+        elif [[ "$IMAGE" != *:java21 ]]; then
             sed -i '/JVM_OPTS:.*ZGC/d' "$VALUES/$SERVER_NAME.yaml"
             # Drop a now-empty extraEnv block
             if [[ "$(tail -1 "$VALUES/$SERVER_NAME.yaml")" == "extraEnv:" ]]; then
