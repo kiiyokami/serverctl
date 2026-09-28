@@ -98,6 +98,10 @@ def main():
 
     # Direct .jar URL
     elif url.lower().endswith(".jar"):
+        if values.get("server", {}).get("type", "").lower() == "paper":
+            raise SystemExit(
+                "ERROR: Paper servers run plugins, not mods — plugin URLs aren't supported yet."
+            )
         mods = values.setdefault("server", {}).setdefault("mods", []) or []
         if url in mods:
             print(f"Already present: {url}")

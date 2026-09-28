@@ -46,7 +46,7 @@ All server management is done through Discord slash commands. Servers are scoped
 
 | Command | Description |
 |---------|-------------|
-| `/create <name> <type> [mods_url]` | Create and start a server. `mods_url` accepts comma-separated Modrinth, CurseForge, or direct JAR URLs. |
+| `/create <name> <type> [mc_version] [mods_url]` | Create and start a server. `type` is Vanilla, Fabric, Forge, or Paper. `mc_version` also picks the matching Java image (Java 8 through 25). `mods_url` accepts comma-separated Modrinth, CurseForge, or direct JAR URLs (not for Paper, which uses plugins). |
 | `/start <name>` | Start a stopped server. |
 | `/stop <name>` | Stop a running server (world data preserved). |
 | `/status <name>` | Show player count, uptime, version, and connect address. |
