@@ -112,6 +112,13 @@ case "$CMD" in
         fi
         IMAGE=$(java_image_for "$MC_VERSION")
 
+        # World seed — only read when the world is first generated
+        read -rp "World seed (number or text) [random]: " SEED
+        if [[ ${#SEED} -gt 64 ]]; then
+            echo "ERROR: Seed must be at most 64 characters."
+            exit 1
+        fi
+
         # Generate values file
         mkdir -p "$VALUES"
         sed \
@@ -131,6 +138,14 @@ case "$CMD" in
             if [[ "$(tail -1 "$VALUES/$SERVER_NAME.yaml")" == "extraEnv:" ]]; then
                 sed -i '/^extraEnv:$/d' "$VALUES/$SERVER_NAME.yaml"
             fi
+        fi
+
+        # extraEnv is the last block in every template, so appending lands inside it
+        if [[ -n "$SEED" ]]; then
+            ESCAPED_SEED=${SEED//\\/\\\\}
+            ESCAPED_SEED=${ESCAPED_SEED//\"/\\\"}
+            grep -q '^extraEnv:' "$VALUES/$SERVER_NAME.yaml" || echo "extraEnv:" >> "$VALUES/$SERVER_NAME.yaml"
+            printf '  SEED: "%s"\n' "$ESCAPED_SEED" >> "$VALUES/$SERVER_NAME.yaml"
         fi
 
         echo "  Image: $IMAGE"

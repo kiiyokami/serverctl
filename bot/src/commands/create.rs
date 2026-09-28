@@ -33,6 +33,7 @@ pub async fn create(
     #[description = "Minecraft version (e.g. 1.20.1). Defaults to the type's pinned version."]
     mc_version: Option<String>,
     #[description = "Modrinth/CurseForge mod or modpack URL, or .jar URL"] mods_url: Option<String>,
+    #[description = "World seed (number or text). Random if omitted."] seed: Option<String>,
 ) -> Result<(), Error> {
     ctx.defer().await?;
     let guild = match ctx.guild_id() {
@@ -79,6 +80,13 @@ pub async fn create(
             return Ok(());
         }
         values::apply_mc_version(&mut v, ver);
+    }
+
+    if let Some(ref s) = seed {
+        if let Err(msg) = values::apply_seed(&mut v, s) {
+            ctx.send(reply::err(msg)).await?;
+            return Ok(());
+        }
     }
 
     if let Some(ref urls) = mods_url {
