@@ -46,12 +46,12 @@ All server management is done through Discord slash commands. Servers are scoped
 
 | Command | Description |
 |---------|-------------|
-| `/create <name> <type> [mc_version] [mods_url] [seed]` | Create and start a server. `type` is Vanilla, Fabric, Forge, or Paper. `mc_version` also picks the matching Java image (Java 8 through 25). `mods_url` accepts comma-separated Modrinth, CurseForge, or direct JAR URLs (not for Paper, which uses plugins). `seed` pins the world seed (number or text); random if omitted. |
+| `/create <name> <type> [mc_version] [mods_url] [seed] [gamemode] [difficulty] [start_now]` | Create a server and start it. `type` is Vanilla, Fabric, Forge, or Paper. `mc_version` also picks the matching Java image (Java 8 through 25). `mods_url` accepts comma-separated Modrinth/CurseForge mod or modpack URLs, `modrinth.com/plugin/...` links (Paper only), or direct `.jar` URLs (installed as plugins on Paper). `seed` pins the world seed (random if omitted). `gamemode` and `difficulty` set the defaults in `server.properties`. `start_now: false` only creates the config; start it later with `/start`. |
 | `/start <name>` | Start a stopped server. |
 | `/stop <name>` | Stop a running server (world data preserved). |
 | `/status <name>` | Show player count, uptime, version, and connect address. |
 | `/list` | List all servers in the guild. |
-| `/mods <name> <url>` | Add a mod or modpack (comma-separated Modrinth/CurseForge/JAR URLs). Takes effect on next start. |
+| `/mods <name> <url>` | Add mods, a modpack, or Paper plugins (comma-separated Modrinth/CurseForge/JAR URLs). Takes effect on next start. |
 | `/curseforge-key <key>` | Save your personal CurseForge API key (required for CurseForge packs/mods). Get one at [console.curseforge.com](https://console.curseforge.com/) — it starts with `$2a$10$`. |
 | `/ttl <name> <minutes>` | Set idle-shutdown timeout. `0` disables auto-shutdown. |
 | `/delete <name> [purge]` | Delete a server. `purge: true` also wipes world data. |

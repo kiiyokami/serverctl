@@ -33,7 +33,10 @@ pub struct ServerConfig {
     pub online_mode: bool,
     #[serde(default)]
     pub mods: Vec<String>,
-    
+    /// Plugin jar URLs for plugin servers (Paper); downloaded into /data/plugins.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub plugins: Vec<String>,
+
     #[serde(rename = "curseforgeFiles", default, skip_serializing_if = "Vec::is_empty")]
     pub cf_files: Vec<String>,
 }
@@ -131,6 +134,18 @@ pub fn apply_seed(v: &mut Values, seed: &str) -> std::result::Result<(), String>
         .get_or_insert_with(serde_yaml::Mapping::new)
         .insert("SEED".into(), seed.into());
     Ok(())
+}
+
+/// Short "TYPE version • N mods • N plugins" label for Discord replies.
+pub fn summary(v: &Values) -> String {
+    let mut s = format!("{} {}", v.server.kind, v.server.version);
+    if !v.server.mods.is_empty() {
+        s.push_str(&format!(" • {} mods", v.server.mods.len()));
+    }
+    if !v.server.plugins.is_empty() {
+        s.push_str(&format!(" • {} plugins", v.server.plugins.len()));
+    }
+    s
 }
 
 pub fn next_free_node_port(used: &std::collections::HashSet<u32>) -> Result<u32> {
@@ -258,6 +273,16 @@ mod tests {
         assert!(apply_seed(&mut v, "   ").is_err());
         assert!(apply_seed(&mut v, &"x".repeat(65)).is_err());
         assert!(v.extra_env.is_none());
+    }
+
+    #[test]
+    fn summary_counts_mods_and_plugins() {
+        let mut v = values_without_extra_env();
+        assert_eq!(summary(&v), "PAPER 1.21.4");
+        v.server.plugins = vec!["a.jar".into(), "b.jar".into()];
+        assert_eq!(summary(&v), "PAPER 1.21.4 • 2 plugins");
+        v.server.mods = vec!["m.jar".into()];
+        assert_eq!(summary(&v), "PAPER 1.21.4 • 1 mods • 2 plugins");
     }
 
     #[test]

@@ -5,6 +5,8 @@ pub enum ModResult {
     Modpack(String),
     Mod(String, String),
     Jar,
+    Plugin(String, String),
+    PluginJar,
     CurseForgeModpack(String),
     CurseForgeMod(String),
     /// A recognized URL that can't be applied here; carries a user-facing reason.
@@ -12,7 +14,10 @@ pub enum ModResult {
     Unrecognized,
 }
 
-/// Parse a single mod/modpack URL and apply its effect to `v`.
+/// Modrinth tags Paper-compatible plugins under any of these loaders.
+const PLUGIN_LOADERS: &[&str] = &["paper", "spigot", "bukkit"];
+
+/// Parse a single mod/modpack/plugin URL and apply its effect to `v`.
 ///
 /// CurseForge URLs require a per-user API key; this only records which user's key
 /// to use (`cf_api_key_user`). Whether that key actually exists is verified later by
@@ -24,19 +29,25 @@ pub async fn apply_mod_url(
 ) -> Result<ModResult, Error> {
     let modpack_re = Regex::new(r"^https?://modrinth\.com/modpack/([^/?#]+)")?;
     let mod_re = Regex::new(r"^https?://modrinth\.com/mod/([^/?#]+)")?;
+    let plugin_re = Regex::new(r"^https?://modrinth\.com/plugin/([^/?#]+)")?;
     let cf_modpack_re =
         Regex::new(r"^https?://(?:www\.|legacy\.)?curseforge\.com/minecraft/modpacks/([^/?#]+)")?;
     let cf_mod_re =
         Regex::new(r"^https?://(?:www\.|legacy\.)?curseforge\.com/minecraft/mc-mods/([^/?#]+)")?;
+    // Signed links (e.g. Discord attachments) carry ?query params after the filename.
+    let is_jar = url
+        .split(['?', '#'])
+        .next()
+        .unwrap_or_default()
+        .to_lowercase()
+        .ends_with(".jar");
+    let is_paper = v.server.kind.eq_ignore_ascii_case("paper");
 
-    // Paper loads plugins from /plugins; jars sent through MODS land in
-    // /data/mods, which Paper never reads.
-    let is_mod_url = mod_re.is_match(url)
-        || cf_mod_re.is_match(url)
-        || url.to_lowercase().ends_with(".jar");
-    if is_mod_url && v.server.kind.eq_ignore_ascii_case("paper") {
+    // Paper loads plugins from /data/plugins; mods would land in /data/mods,
+    // which Paper never reads.
+    if is_paper && (mod_re.is_match(url) || cf_mod_re.is_match(url)) {
         return Ok(ModResult::Rejected(
-            "Paper servers run plugins, not mods — plugin URLs aren't supported yet.".into(),
+            "Paper servers run plugins, not mods. Use a `modrinth.com/plugin/...` link or a direct `.jar` URL.".into(),
         ));
     }
 
@@ -50,11 +61,28 @@ pub async fn apply_mod_url(
         let slug = c.get(1).unwrap().as_str().to_string();
         let loader = v.server.kind.to_lowercase();
         let mc = v.server.version.clone();
-        let (vn, jar) = modrinth::latest_jar(&slug, &loader, &mc).await?;
+        let (vn, jar) = modrinth::latest_jar(&slug, &[&loader], &mc).await?;
         if !v.server.mods.contains(&jar) {
             v.server.mods.push(jar);
         }
         Ok(ModResult::Mod(slug, vn))
+    } else if let Some(c) = plugin_re.captures(url) {
+        if !is_paper {
+            return Ok(ModResult::Rejected(format!(
+                "Plugins need a Paper server; `{}` is {}.",
+                v.name, v.server.kind
+            )));
+        }
+        let slug = c.get(1).unwrap().as_str().to_string();
+        let mc = v.server.version.clone();
+        let (vn, jar) = match modrinth::latest_jar(&slug, PLUGIN_LOADERS, &mc).await {
+            Ok(found) => found,
+            Err(e) => return Ok(ModResult::Rejected(e.to_string())),
+        };
+        if !v.server.plugins.contains(&jar) {
+            v.server.plugins.push(jar);
+        }
+        Ok(ModResult::Plugin(slug, vn))
     } else if let Some(c) = cf_modpack_re.captures(url) {
         let slug = c.get(1).unwrap().as_str().to_string();
         let extra = v.extra_env.get_or_insert_with(serde_yaml::Mapping::new);
@@ -74,12 +102,17 @@ pub async fn apply_mod_url(
         }
         v.cf_api_key_user = Some(user_id.to_string());
         Ok(ModResult::CurseForgeMod(slug))
-    } else if url.to_lowercase().ends_with(".jar") {
+    } else if is_jar {
         let url = url.to_string();
-        if !v.server.mods.contains(&url) {
-            v.server.mods.push(url);
+        let (list, result) = if is_paper {
+            (&mut v.server.plugins, ModResult::PluginJar)
+        } else {
+            (&mut v.server.mods, ModResult::Jar)
+        };
+        if !list.contains(&url) {
+            list.push(url);
         }
-        Ok(ModResult::Jar)
+        Ok(result)
     } else {
         Ok(ModResult::Unrecognized)
     }
@@ -104,6 +137,8 @@ pub async fn apply_mod_urls(
             ModResult::Modpack(slug) => added.push(format!("modpack `{slug}`")),
             ModResult::Mod(slug, vn) => added.push(format!("`{slug}` ({vn})")),
             ModResult::Jar => added.push("direct jar".into()),
+            ModResult::Plugin(slug, vn) => added.push(format!("plugin `{slug}` ({vn})")),
+            ModResult::PluginJar => added.push("plugin jar".into()),
             ModResult::CurseForgeModpack(slug) => {
                 needs_cf_key = true;
                 added.push(format!("CurseForge modpack `{slug}`"));
@@ -130,7 +165,7 @@ pub async fn apply_mod_urls(
 pub async fn mods(
     ctx: Context<'_>,
     #[description = "Server name"] name: String,
-    #[description = "Mod / modpack URL or .jar URL"] url: String,
+    #[description = "Mod / modpack / plugin URL or .jar URL"] url: String,
 ) -> Result<(), Error> {
     ctx.defer().await?;
     let guild = ctx.guild_id().map(|g| g.to_string()).unwrap_or_default();
@@ -233,11 +268,39 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn jar_on_paper_goes_to_plugins() {
+        let mut v = base_values("PAPER");
+        let url = "https://cdn.discordapp.com/attachments/1/2/PlotFence.jar";
+        let r = apply_mod_url(&mut v, url, "42").await.unwrap();
+        assert!(matches!(r, ModResult::PluginJar));
+        assert_eq!(v.server.plugins, vec![url.to_string()]);
+        assert!(v.server.mods.is_empty());
+    }
+
+    #[tokio::test]
+    async fn jar_with_query_string_is_recognized() {
+        let mut v = base_values("FABRIC");
+        let url = "https://cdn.discordapp.com/attachments/1/2/x.jar?ex=abc&is=def&hm=123";
+        let r = apply_mod_url(&mut v, url, "42").await.unwrap();
+        assert!(matches!(r, ModResult::Jar));
+        assert_eq!(v.server.mods, vec![url.to_string()]);
+    }
+
+    #[tokio::test]
+    async fn plugin_url_rejected_on_non_paper() {
+        let mut v = base_values("FABRIC");
+        let r = apply_mod_url(&mut v, "https://modrinth.com/plugin/luckperms", "42")
+            .await
+            .unwrap();
+        assert!(matches!(r, ModResult::Rejected(_)));
+        assert!(v.server.plugins.is_empty());
+    }
+
+    #[tokio::test]
     async fn mods_rejected_on_paper() {
         for url in [
             "https://modrinth.com/mod/sodium",
             "https://www.curseforge.com/minecraft/mc-mods/jei",
-            "https://example.com/some-mod.jar",
         ] {
             let mut v = base_values("PAPER");
             let r = apply_mod_url(&mut v, url, "42").await.unwrap();
