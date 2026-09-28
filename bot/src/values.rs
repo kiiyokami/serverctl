@@ -120,6 +120,19 @@ pub fn write(path: &Path, v: &Values) -> Result<()> {
     Ok(())
 }
 
+/// Pin the world seed. Minecraft accepts numeric or text seeds; it only
+/// reads the seed when generating a new world, so this matters at create time.
+pub fn apply_seed(v: &mut Values, seed: &str) -> std::result::Result<(), String> {
+    let seed = seed.trim();
+    if seed.is_empty() || seed.chars().count() > 64 {
+        return Err("Seed must be 1–64 characters (e.g. `-4172144997902289642`).".into());
+    }
+    v.extra_env
+        .get_or_insert_with(serde_yaml::Mapping::new)
+        .insert("SEED".into(), seed.into());
+    Ok(())
+}
+
 pub fn next_free_node_port(used: &std::collections::HashSet<u32>) -> Result<u32> {
     for port in 30565..=30568 {
         if !used.contains(&port) {
@@ -203,6 +216,48 @@ mod tests {
         let extra = v.extra_env.as_ref().unwrap();
         assert_eq!(extra.get("JVM_OPTS").unwrap().as_str(), Some("-XX:+UseZGC"));
         assert!(extra.contains_key("OTHER"));
+    }
+
+    fn values_without_extra_env() -> Values {
+        serde_yaml::from_str(
+            "name: t\nnodePort: 30565\nserver:\n  type: PAPER\n  version: \"1.21.4\"\n  memory: 4G\n",
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn apply_seed_sets_seed_env() {
+        let mut v = values_with_jvm_opts("1.21.1");
+        apply_seed(&mut v, " -4172144997902289642 ").unwrap();
+        let extra = v.extra_env.as_ref().unwrap();
+        assert_eq!(extra.get("SEED").unwrap().as_str(), Some("-4172144997902289642"));
+        assert!(extra.contains_key("JVM_OPTS"));
+    }
+
+    #[test]
+    fn apply_seed_creates_extra_env_when_missing() {
+        let mut v = values_without_extra_env();
+        apply_seed(&mut v, "glacier").unwrap();
+        assert_eq!(
+            v.extra_env.unwrap().get("SEED").unwrap().as_str(),
+            Some("glacier")
+        );
+    }
+
+    #[test]
+    fn numeric_seed_survives_yaml_round_trip_as_string() {
+        let mut v = values_without_extra_env();
+        apply_seed(&mut v, "12345").unwrap();
+        let back: Values = serde_yaml::from_str(&serde_yaml::to_string(&v).unwrap()).unwrap();
+        assert_eq!(back.extra_env.unwrap().get("SEED").unwrap().as_str(), Some("12345"));
+    }
+
+    #[test]
+    fn apply_seed_rejects_blank_and_oversized() {
+        let mut v = values_without_extra_env();
+        assert!(apply_seed(&mut v, "   ").is_err());
+        assert!(apply_seed(&mut v, &"x".repeat(65)).is_err());
+        assert!(v.extra_env.is_none());
     }
 
     #[test]
