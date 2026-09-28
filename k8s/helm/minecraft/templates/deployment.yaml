@@ -90,6 +90,10 @@ spec:
             - name: MODS
               value: {{ .Values.server.mods | join "," | quote }}
             {{- end }}
+            {{- if and .Values.server.plugins (not (hasKey $extra "PLUGINS")) }}
+            - name: PLUGINS
+              value: {{ .Values.server.plugins | join "," | quote }}
+            {{- end }}
             {{- if and .Values.server.curseforgeFiles (not (hasKey $extra "CURSEFORGE_FILES")) }}
             - name: CURSEFORGE_FILES
               value: {{ .Values.server.curseforgeFiles | join "," | quote }}

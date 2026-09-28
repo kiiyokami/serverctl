@@ -7,7 +7,8 @@ Usage: mod.py <values-file> <url>
 Recognized URL types:
   https://modrinth.com/modpack/<slug>  → sets extraEnv TYPE=MODRINTH and MODRINTH_PROJECT
   https://modrinth.com/mod/<slug>      → resolves latest .jar via Modrinth API, adds to server.mods
-  https://...something.jar             → adds directly to server.mods
+  https://modrinth.com/plugin/<slug>   → (Paper) resolves latest .jar, adds to server.plugins
+  https://...something.jar             → adds to server.mods (server.plugins on Paper)
 """
 import json
 import re
@@ -23,19 +24,23 @@ except ImportError:
     sys.exit(1)
 
 
-def fetch_latest_jar(slug: str, loader: str, game_version: str) -> tuple[str, str]:
+PLUGIN_LOADERS = ["paper", "spigot", "bukkit"]
+
+
+def fetch_latest_jar(slug: str, loaders: list[str], game_version: str) -> tuple[str, str]:
     """Returns (version_name, jar_url) from Modrinth API, filtered by MC version."""
+    loader_list = ",".join(f"%22{l}%22" for l in loaders)
     api = (
         f"https://api.modrinth.com/v2/project/{slug}/version"
-        f"?loaders=[%22{loader}%22]&game_versions=[%22{game_version}%22]"
+        f"?loaders=[{loader_list}]&game_versions=[%22{game_version}%22]"
     )
     req = urllib.request.Request(api, headers={"User-Agent": "serverctl"})
     with urllib.request.urlopen(req, timeout=10) as resp:
         versions = json.loads(resp.read())
     if not versions:
         raise SystemExit(
-            f"ERROR: No '{slug}' version found for {loader} on Minecraft {game_version}.\n"
-            f"  Check available versions at https://modrinth.com/mod/{slug}/versions"
+            f"ERROR: No '{slug}' version found for {'/'.join(loaders)} on Minecraft {game_version}.\n"
+            f"  Check available versions at https://modrinth.com/project/{slug}/versions"
         )
     latest = versions[0]
     primary = next((f for f in latest["files"] if f.get("primary")), latest["files"][0])
@@ -86,7 +91,7 @@ def main():
             raise SystemExit(
                 "ERROR: server.version must be pinned (not LATEST) to resolve mod compatibility."
             )
-        version_name, jar_url = fetch_latest_jar(slug, loader, game_version)
+        version_name, jar_url = fetch_latest_jar(slug, [loader], game_version)
         mods = values.setdefault("server", {}).setdefault("mods", []) or []
         if jar_url in mods:
             print(f"Already present: {jar_url}")
@@ -96,19 +101,34 @@ def main():
         print(f"Added {slug} {version_name}")
         print(f"  {jar_url}")
 
-    # Direct .jar URL
-    elif url.lower().endswith(".jar"):
-        if values.get("server", {}).get("type", "").lower() == "paper":
-            raise SystemExit(
-                "ERROR: Paper servers run plugins, not mods — plugin URLs aren't supported yet."
-            )
-        mods = values.setdefault("server", {}).setdefault("mods", []) or []
-        if url in mods:
+    # Modrinth plugin (Paper only)
+    elif (m := re.match(r"https?://modrinth\.com/plugin/([^/?#]+)", url)):
+        slug = m.group(1)
+        server_type = values.get("server", {}).get("type", "").lower()
+        if server_type != "paper":
+            raise SystemExit(f"ERROR: Plugins need a PAPER server; server.type is '{server_type.upper() or 'unset'}'.")
+        game_version = values.get("server", {}).get("version", "")
+        version_name, jar_url = fetch_latest_jar(slug, PLUGIN_LOADERS, game_version)
+        plugins = values.setdefault("server", {}).setdefault("plugins", []) or []
+        if jar_url in plugins:
+            print(f"Already present: {jar_url}")
+            return
+        plugins.append(jar_url)
+        values["server"]["plugins"] = plugins
+        print(f"Added plugin {slug} {version_name}")
+        print(f"  {jar_url}")
+
+    # Direct .jar URL (signed links may carry ?query params after the filename)
+    elif re.split(r"[?#]", url)[0].lower().endswith(".jar"):
+        is_paper = values.get("server", {}).get("type", "").lower() == "paper"
+        key = "plugins" if is_paper else "mods"
+        jars = values.setdefault("server", {}).setdefault(key, []) or []
+        if url in jars:
             print(f"Already present: {url}")
             return
-        mods.append(url)
-        values["server"]["mods"] = mods
-        print(f"Added: {url}")
+        jars.append(url)
+        values["server"][key] = jars
+        print(f"Added {'plugin' if is_paper else 'mod'}: {url}")
 
     else:
         raise SystemExit(
@@ -116,6 +136,7 @@ def main():
             "  Expected one of:\n"
             "    https://modrinth.com/modpack/<slug>\n"
             "    https://modrinth.com/mod/<slug>\n"
+            "    https://modrinth.com/plugin/<slug>  (Paper)\n"
             "    https://.../*.jar"
         )
 

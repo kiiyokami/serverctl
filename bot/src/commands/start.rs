@@ -48,11 +48,7 @@ pub async fn start(
     let v = values::read(&values::path_for(&name)).ok();
     let node_port = v.as_ref().map(|v| v.node_port).unwrap_or(0);
     let public_port = node_port.saturating_sub(5000);
-    let ver_str = v.as_ref().map(|v| {
-        let mods = v.server.mods.len();
-        let base = format!("{} {}", v.server.kind, v.server.version);
-        if mods > 0 { format!("{base} • {mods} mods") } else { base }
-    }).unwrap_or_default();
+    let ver_str = v.as_ref().map(values::summary).unwrap_or_default();
 
     let handle = ctx.send(reply::pending(format!(
         "🟡 **`{name}`** is starting ({ver_str})\nThis can take up to 10 minutes for modpacks."
