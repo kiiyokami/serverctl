@@ -46,7 +46,7 @@ All server management is done through Discord slash commands. Servers are scoped
 
 | Command | Description |
 |---------|-------------|
-| `/create <name> <type> [mc_version] [mods_url] [seed] [gamemode] [difficulty] [start_now]` | Create a server and start it. `type` is Vanilla, Fabric, Forge, or Paper. `mc_version` also picks the matching Java image (Java 8 through 25). `mods_url` accepts comma-separated Modrinth/CurseForge mod or modpack URLs, `modrinth.com/plugin/...` links (Paper only), or direct `.jar` URLs (installed as plugins on Paper). `seed` pins the world seed (random if omitted). `gamemode` and `difficulty` set the defaults in `server.properties`. `start_now: false` only creates the config; start it later with `/start`. |
+| `/create <name> <type> [mc_version] [mods_url] [seed] [gamemode] [difficulty] [start_now]` | Create a server and start it. `type` is Vanilla, Fabric, Forge, or Paper. `mc_version` also picks the matching Java image (Java 8 through 25). `mods_url` accepts comma-separated Modrinth/CurseForge mod or modpack URLs (a CurseForge file link such as `.../modpacks/<pack>/files/<id>` pins that version, and a server-pack file link runs the server pack), `modrinth.com/plugin/...` links (Paper only), or direct `.jar` URLs (installed as plugins on Paper). `seed` pins the world seed (random if omitted). `gamemode` and `difficulty` set the defaults in `server.properties`. `start_now: false` only creates the config; start it later with `/start`. |
 | `/start <name>` | Start a stopped server. |
 | `/stop <name>` | Stop a running server (world data preserved). |
 | `/status <name>` | Show player count, uptime, version, and connect address. |

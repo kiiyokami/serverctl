@@ -4,6 +4,7 @@ use poise::serenity_prelude as serenity;
 mod auth;
 mod commands;
 mod config;
+mod curseforge;
 mod helm;
 mod kube;
 mod minecraft;

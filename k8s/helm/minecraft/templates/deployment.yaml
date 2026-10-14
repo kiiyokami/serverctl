@@ -38,13 +38,26 @@ spec:
                 secretKeyRef:
                   name: curseforge-keys
                   key: {{ .Values.cfApiKeyUser | quote }}
-            {{- if and .Values.extraEnv (hasKey (.Values.extraEnv | default dict) "CF_PAGE_URL") }}
-            - name: CF_PAGE_URL
-              value: {{ index .Values.extraEnv "CF_PAGE_URL" | quote }}
+            {{- range $k, $v := (.Values.extraEnv | default dict) }}
+            {{- if has $k (list "CF_PAGE_URL" "CF_SERVER_MOD" "CF_SERVER_PACK_URL") }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
             {{- end }}
+            {{- end }}
+          volumeMounts:
+            - mountPath: /data
+              name: world-data
           args:
             - |
               set -u
+              # Server packs: fetch with the API key (the CDN requires one), once per file.
+              if [ -n "${CF_SERVER_PACK_URL:-}" ] && [ ! -f "${CF_SERVER_MOD}" ]; then
+                echo "[cf-gate] downloading server pack to ${CF_SERVER_MOD}"
+                curl -fL --retry 3 -H "x-api-key: ${CF_API_KEY}" \
+                  -o "${CF_SERVER_MOD}.part" "${CF_SERVER_PACK_URL}" || exit 1
+                mv "${CF_SERVER_MOD}.part" "${CF_SERVER_MOD}"
+                chown 1000:1000 "${CF_SERVER_MOD}"
+              fi
               slug="${CF_PAGE_URL##*/}"
               if [ -z "${slug:-}" ]; then echo "[cf-gate] no CF_PAGE_URL slug; skipping"; exit 0; fi
               url="https://api.curseforge.com/v1/mods/search?gameId=432&slug=${slug}"
