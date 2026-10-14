@@ -24,6 +24,24 @@ pub struct File {
     pub download_url: Option<String>,
     #[serde(default)]
     pub is_server_pack: bool,
+    /// Top-level entries of the zip.
+    #[serde(default)]
+    pub modules: Vec<Module>,
+}
+
+#[derive(Deserialize)]
+pub struct Module {
+    pub name: String,
+}
+
+impl File {
+    /// CurseForge only flags server files attached to a client file; packs like
+    /// ATM upload them standalone. A modpack zip without manifest.json can't be
+    /// a client pack, so treat it as a server pack too.
+    fn runs_as_server_pack(&self) -> bool {
+        self.is_server_pack
+            || (!self.modules.is_empty() && !self.modules.iter().any(|m| m.name == "manifest.json"))
+    }
 }
 
 /// Look up one file of a modpack by its page slug and file ID.
@@ -67,7 +85,7 @@ pub fn apply_file(
     page_url: &str,
     f: &File,
 ) -> std::result::Result<String, String> {
-    if !f.is_server_pack {
+    if !f.runs_as_server_pack() {
         let extra = v.extra_env.get_or_insert_with(serde_yaml::Mapping::new);
         extra.insert("TYPE".into(), "AUTO_CURSEFORGE".into());
         extra.insert("CF_PAGE_URL".into(), page_url.into());
@@ -135,6 +153,7 @@ mod tests {
             file_name: "ServerFiles-8.2.zip".into(),
             download_url: Some("https://edge.forgecdn.net/files/8945/94/ServerFiles-8.2.zip".into()),
             is_server_pack: true,
+            modules: vec![],
         };
         apply_file(&mut v, "all-the-mods-10", 8945094, URL, &f).unwrap();
         assert_eq!(env(&v, "TYPE").as_deref(), Some("CURSEFORGE"));
@@ -156,11 +175,53 @@ mod tests {
             file_name: "All the Mods 10-8.2.zip".into(),
             download_url: Some("https://edge.forgecdn.net/x.zip".into()),
             is_server_pack: false,
+            modules: vec![],
         };
         apply_file(&mut v, "all-the-mods-10", 8945094, URL, &f).unwrap();
         assert_eq!(env(&v, "TYPE").as_deref(), Some("AUTO_CURSEFORGE"));
         assert_eq!(env(&v, "CF_PAGE_URL").as_deref(), Some(URL));
         assert!(env(&v, "CF_SERVER_MOD").is_none());
+    }
+
+    fn module(name: &str) -> Module {
+        Module { name: name.into() }
+    }
+
+    #[test]
+    fn standalone_server_files_detected_by_missing_manifest() {
+        let mut v = base();
+        let f = File {
+            file_name: "ServerFiles-8.2.zip".into(),
+            download_url: Some("https://edge.forgecdn.net/files/8945/94/ServerFiles-8.2.zip".into()),
+            is_server_pack: false,
+            modules: vec![module("mods"), module("config"), module("startserver.sh")],
+        };
+        apply_file(&mut v, "all-the-mods-10", 8945094, URL, &f).unwrap();
+        assert_eq!(env(&v, "TYPE").as_deref(), Some("CURSEFORGE"));
+    }
+
+    #[test]
+    fn client_zip_with_manifest_stays_auto() {
+        let mut v = base();
+        let f = File {
+            file_name: "All the Mods 10-8.2.zip".into(),
+            download_url: Some("https://edge.forgecdn.net/x.zip".into()),
+            is_server_pack: false,
+            modules: vec![module("manifest.json"), module("overrides"), module("modlist.html")],
+        };
+        apply_file(&mut v, "all-the-mods-10", 8945094, URL, &f).unwrap();
+        assert_eq!(env(&v, "TYPE").as_deref(), Some("AUTO_CURSEFORGE"));
+    }
+
+    #[test]
+    fn modules_parse_from_api_json() {
+        let r: Resp<File> = serde_json::from_str(
+            r#"{"data":{"fileName":"ServerFiles-8.2.zip","downloadUrl":null,"isServerPack":false,
+                "modules":[{"name":"mods","fingerprint":1},{"name":"startserver.sh","fingerprint":2}]}}"#,
+        )
+        .unwrap();
+        assert_eq!(r.data.modules.len(), 2);
+        assert_eq!(r.data.modules[1].name, "startserver.sh");
     }
 
     #[test]
@@ -170,6 +231,7 @@ mod tests {
             file_name: "Server.zip".into(),
             download_url: None,
             is_server_pack: true,
+            modules: vec![],
         };
         assert!(apply_file(&mut v, "some-pack", 1, URL, &f).is_err());
         assert!(v.extra_env.is_none());
