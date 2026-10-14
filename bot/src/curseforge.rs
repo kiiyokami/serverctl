@@ -37,10 +37,12 @@ pub struct Module {
 impl File {
     /// CurseForge only flags server files attached to a client file; packs like
     /// ATM upload them standalone. A modpack zip without manifest.json can't be
-    /// a client pack, so treat it as a server pack too.
+    /// a client pack, so treat it as a server pack too. The module list isn't
+    /// always populated, so a "server" filename (ServerFiles-x.zip) also counts.
     fn runs_as_server_pack(&self) -> bool {
         self.is_server_pack
             || (!self.modules.is_empty() && !self.modules.iter().any(|m| m.name == "manifest.json"))
+            || self.file_name.to_lowercase().contains("server")
     }
 }
 
@@ -197,6 +199,19 @@ mod tests {
             modules: vec![module("mods"), module("config"), module("startserver.sh")],
         };
         apply_file(&mut v, "all-the-mods-10", 8945094, URL, &f).unwrap();
+        assert_eq!(env(&v, "TYPE").as_deref(), Some("CURSEFORGE"));
+    }
+
+    #[test]
+    fn server_files_name_detected_without_module_list() {
+        let mut v = base();
+        let f = File {
+            file_name: "ServerFiles-1.3.0.zip".into(),
+            download_url: Some("https://edge.forgecdn.net/files/8822/160/ServerFiles-1.3.0.zip".into()),
+            is_server_pack: false,
+            modules: vec![],
+        };
+        apply_file(&mut v, "all-the-mons", 8822160, URL, &f).unwrap();
         assert_eq!(env(&v, "TYPE").as_deref(), Some("CURSEFORGE"));
     }
 
