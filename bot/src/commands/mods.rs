@@ -1,4 +1,4 @@
-use crate::{auth, kube as k, modrinth, reply, values, Context, Error};
+use crate::{auth, curseforge, kube as k, modrinth, reply, values, Context, Error};
 use regex::Regex;
 
 pub enum ModResult {
@@ -9,6 +9,9 @@ pub enum ModResult {
     PluginJar,
     CurseForgeModpack(String),
     CurseForgeMod(String),
+    /// A specific modpack file: (slug, file ID, page URL). Resolved in
+    /// [`apply_mod_urls`] once the user's API key is available.
+    CurseForgeFile(String, u64, String),
     /// A recognized URL that can't be applied here; carries a user-facing reason.
     Rejected(String),
     Unrecognized,
@@ -30,6 +33,9 @@ pub async fn apply_mod_url(
     let modpack_re = Regex::new(r"^https?://modrinth\.com/modpack/([^/?#]+)")?;
     let mod_re = Regex::new(r"^https?://modrinth\.com/mod/([^/?#]+)")?;
     let plugin_re = Regex::new(r"^https?://modrinth\.com/plugin/([^/?#]+)")?;
+    let cf_file_re = Regex::new(
+        r"^https?://(?:www\.|legacy\.)?curseforge\.com/minecraft/modpacks/([^/?#]+)/files/(\d+)",
+    )?;
     let cf_modpack_re =
         Regex::new(r"^https?://(?:www\.|legacy\.)?curseforge\.com/minecraft/modpacks/([^/?#]+)")?;
     let cf_mod_re =
@@ -83,6 +89,11 @@ pub async fn apply_mod_url(
             v.server.plugins.push(jar);
         }
         Ok(ModResult::Plugin(slug, vn))
+    } else if let Some(c) = cf_file_re.captures(url) {
+        let slug = c.get(1).unwrap().as_str().to_string();
+        let file_id = c.get(2).unwrap().as_str().parse()?;
+        v.cf_api_key_user = Some(user_id.to_string());
+        Ok(ModResult::CurseForgeFile(slug, file_id, url.to_string()))
     } else if let Some(c) = cf_modpack_re.captures(url) {
         let slug = c.get(1).unwrap().as_str().to_string();
         let extra = v.extra_env.get_or_insert_with(serde_yaml::Mapping::new);
@@ -132,6 +143,7 @@ pub async fn apply_mod_urls(
 ) -> Result<Result<Vec<String>, String>, Error> {
     let mut added: Vec<String> = Vec::new();
     let mut needs_cf_key = false;
+    let mut cf_files = Vec::new();
     for u in urls.split(',').map(str::trim).filter(|s| !s.is_empty()) {
         match apply_mod_url(v, u, user_id).await? {
             ModResult::Modpack(slug) => added.push(format!("modpack `{slug}`")),
@@ -147,16 +159,33 @@ pub async fn apply_mod_urls(
                 needs_cf_key = true;
                 added.push(format!("CurseForge mod `{slug}`"));
             }
+            ModResult::CurseForgeFile(slug, file_id, page) => {
+                needs_cf_key = true;
+                cf_files.push((slug, file_id, page));
+            }
             ModResult::Rejected(msg) => return Ok(Err(msg)),
             ModResult::Unrecognized => return Ok(Err(format!("Unrecognized URL: `{u}`"))),
         }
     }
-    if needs_cf_key && k::get_curseforge_key(client, user_id).await?.is_none() {
+    if !needs_cf_key {
+        return Ok(Ok(added));
+    }
+    let Some(key) = k::get_curseforge_key(client, user_id).await? else {
         return Ok(Err(
             "You haven't set a CurseForge API key yet. Run `/curseforge-key` first \
              (get one at <https://console.curseforge.com/>)."
                 .into(),
         ));
+    };
+    for (slug, file_id, page) in cf_files {
+        let file = match curseforge::modpack_file(&key, &slug, file_id).await {
+            Ok(f) => f,
+            Err(e) => return Ok(Err(format!("Couldn't look up that CurseForge file: {e}"))),
+        };
+        match curseforge::apply_file(v, &slug, file_id, &page, &file) {
+            Ok(desc) => added.push(desc),
+            Err(msg) => return Ok(Err(msg)),
+        }
     }
     Ok(Ok(added))
 }
@@ -222,6 +251,16 @@ mod tests {
             extra.get("CF_PAGE_URL").unwrap().as_str(),
             Some("https://www.curseforge.com/minecraft/modpacks/all-the-mods-10")
         );
+    }
+
+    #[tokio::test]
+    async fn curseforge_file_link_is_resolved_later() {
+        let mut v = base_values("FORGE");
+        let url = "https://www.curseforge.com/minecraft/modpacks/all-the-mods-10/files/8945094";
+        let r = apply_mod_url(&mut v, url, "42").await.unwrap();
+        assert!(matches!(r, ModResult::CurseForgeFile(ref s, 8945094, _) if s == "all-the-mods-10"));
+        assert_eq!(v.cf_api_key_user.as_deref(), Some("42"));
+        assert!(v.extra_env.is_none());
     }
 
     #[tokio::test]
