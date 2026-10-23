@@ -196,6 +196,11 @@ async fn run(
         return Ok(());
     }
     choice.apply(&mut v);
+    // Picked only now so a second /create waiting on its panel can't take the same port.
+    let client = k::client().await?;
+    let mut used_ports = k::used_node_ports(&client).await?;
+    used_ports.extend(values::local_node_ports());
+    v.node_port = values::next_free_node_port(&used_ports)?;
     values::write(&dest, &v)?;
     let ver_str = values::summary(&v);
     let tip = format!("Change gameplay settings any time with `/settings {name}`.");
@@ -209,7 +214,6 @@ async fn run(
     }
 
     let channel = submit.channel_id;
-    let client = k::client().await?;
     if let Some(running) = start::launch(http, token, channel, &client, &name).await? {
         reply::edit(http, token, reply::pending(format!(
             "✅ Created **`{name}`** ({ver_str}), but {running}/{} servers are already running. \
@@ -236,13 +240,9 @@ async fn prepare(
     }
 
     let client = k::client().await?;
-    let mut used_ports = k::used_node_ports(&client).await?;
-    used_ports.extend(values::local_node_ports());
-
     let template = values::templates_dir().join(format!("{}.yaml", kind.template_name()));
     let mut v: values::Values = serde_yaml::from_str(&std::fs::read_to_string(&template)?)?;
     v.name = name.to_string();
-    v.node_port = values::next_free_node_port(&used_ports)?;
     v.discord_guild_id = ctx.guild_id().map(|g| g.to_string()).unwrap_or_default();
 
     if let Some(ver) = form.version.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
