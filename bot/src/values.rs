@@ -117,9 +117,12 @@ pub fn read(path: &Path) -> Result<Values> {
     Ok(serde_yaml::from_str(&text)?)
 }
 
+/// Write via a temp file and rename, so a crash mid-write can't leave a truncated config.
 pub fn write(path: &Path, v: &Values) -> Result<()> {
     let text = serde_yaml::to_string(v)?;
-    std::fs::write(path, text)?;
+    let tmp = path.with_extension("yaml.tmp");
+    std::fs::write(&tmp, text)?;
+    std::fs::rename(&tmp, path)?;
     Ok(())
 }
 
@@ -154,7 +157,9 @@ pub fn all() -> Vec<Values> {
         .into_iter()
         .flatten()
         .flatten()
-        .filter_map(|e| read(&e.path()).ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "yaml"))
+        .filter_map(|p| read(&p).ok())
         .collect()
 }
 

@@ -1,5 +1,4 @@
 use anyhow::Result;
-use chrono;
 use k8s_openapi::api::apps::v1::Deployment;
 use k8s_openapi::api::core::v1::{PersistentVolumeClaim, Secret, Service};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;

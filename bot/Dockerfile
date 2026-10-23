@@ -11,8 +11,10 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \
-    && curl -fsSL https://get.helm.sh/helm-v3.16.0-linux-amd64.tar.gz | tar xz -C /tmp \
+    && curl -fsSLo /tmp/helm.tgz https://get.helm.sh/helm-v3.16.0-linux-amd64.tar.gz \
+    && echo "327cfbc7ddc5a3eb644039ceb0cff66394628654c4f5a76bf715ed15b893983b  /tmp/helm.tgz" | sha256sum -c - \
+    && tar xzf /tmp/helm.tgz -C /tmp \
     && mv /tmp/linux-amd64/helm /usr/local/bin/helm \
-    && rm -rf /tmp/linux-amd64
+    && rm -rf /tmp/linux-amd64 /tmp/helm.tgz
 COPY --from=builder /serverctl-bot /usr/local/bin/serverctl-bot
 ENTRYPOINT ["/usr/local/bin/serverctl-bot"]
