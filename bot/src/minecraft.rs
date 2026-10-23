@@ -21,8 +21,12 @@ pub struct ServerStatus {
     pub max: u32,
 }
 
-pub async fn ping(port: u16) -> Option<ServerStatus> {
-    let addr = format!("127.0.0.1:{port}");
+/// Server List Ping via the server's Service. The bot pod isn't on the host
+/// network, so 127.0.0.1:<nodePort> would hit the bot's own pod.
+pub async fn ping(server: &str) -> Option<ServerStatus> {
+    let host = format!("{server}.games.svc.cluster.local");
+    let port: u16 = 25565;
+    let addr = format!("{host}:{port}");
     let mut stream = tokio::time::timeout(
         std::time::Duration::from_secs(5),
         TcpStream::connect(&addr),
@@ -31,7 +35,7 @@ pub async fn ping(port: u16) -> Option<ServerStatus> {
     .ok()?
     .ok()?;
 
-    let host = b"127.0.0.1";
+    let host = host.as_bytes();
     let mut handshake = Vec::new();
     handshake.extend(varint(0x00));
     handshake.extend(varint(765));

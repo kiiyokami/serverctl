@@ -1,4 +1,4 @@
-use crate::{kube as k, minecraft, values};
+use crate::{kube as k, minecraft};
 use poise::serenity_prelude as serenity;
 use std::collections::HashMap;
 
@@ -29,10 +29,8 @@ pub async fn run(ctx: serenity::Context) {
             }
             let replicas = k::replicas(&dep);
             if replicas > 0 {
-                if let Ok(v) = values::read(&values::path_for(&name)) {
-                    if let Some(s) = minecraft::ping(v.node_port as u16).await {
-                        players += s.online;
-                    }
+                if let Some(s) = minecraft::ping(&name).await {
+                    players += s.online;
                 }
             }
             let prev = last.get(&name).copied().unwrap_or(replicas);

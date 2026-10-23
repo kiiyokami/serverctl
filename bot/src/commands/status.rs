@@ -48,7 +48,7 @@ pub async fn status(
         return Ok(());
     }
 
-    let ping = minecraft::ping(node_port as u16).await;
+    let ping = minecraft::ping(&name).await;
     let uptime = k::uptime_secs(&dep);
 
     let mut lines = vec![format!("🟢 **`{name}`** — running")];

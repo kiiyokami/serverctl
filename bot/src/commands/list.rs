@@ -29,7 +29,7 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
         if r == 0 {
             lines.push(format!("⚫ **`{name}`** — stopped"));
         } else if avail >= 1 {
-            let ping = minecraft::ping(node_port as u16).await;
+            let ping = minecraft::ping(name).await;
             let uptime = k::uptime_secs(&dep);
             let version_str = v.as_ref().map(|v| format!("{} {}", v.server.kind, v.server.version));
 
