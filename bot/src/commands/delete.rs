@@ -17,9 +17,12 @@ pub async fn delete(
     let guild = ctx.guild_id().map(|g| g.to_string()).unwrap_or_default();
     let client = ctx.data().kube.clone();
     let purge = purge.unwrap_or(false);
+    let pvc_name = format!("{name}-data");
+    // A server that was never started has no world yet.
+    let has_world = k::get_pvc(&client, &pvc_name).await?;
     if !auth::guild_owns(&client, &guild, &name).await? {
         // The server may be gone with its world kept; the world can still be purged.
-        let world_owner = k::pvc_guild_id(&client, &format!("{name}-data")).await?;
+        let world_owner = has_world.as_ref().and_then(k::pvc_guild_id);
         if guild.is_empty() || world_owner.as_deref() != Some(guild.as_str()) {
             ctx.send(reply::unknown_server(&name)).await?;
             return Ok(());
@@ -76,8 +79,10 @@ pub async fn delete(
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => failed.push(format!("Remove config: {e}")),
         _ => {}
     }
-    let world = if purge {
-        match k::delete_pvc(&client, &format!("{name}-data")).await {
+    let world = if has_world.is_none() {
+        String::new()
+    } else if purge {
+        match k::delete_pvc(&client, &pvc_name).await {
             Ok(()) => "World deleted.".to_string(),
             Err(e) => {
                 failed.push(format!("Delete world: {e}"));
@@ -89,7 +94,7 @@ pub async fn delete(
     };
 
     let msg = if failed.is_empty() {
-        reply::ok(format!("✅ Deleted **`{name}`**. {world}"))
+        reply::ok(format!("✅ Deleted **`{name}`**. {world}").trim_end().to_string())
     } else {
         reply::err(format!(
             "⚠️ Deleting **`{name}`** didn't fully work. {world}\n{}",

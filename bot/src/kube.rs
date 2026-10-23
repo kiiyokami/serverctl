@@ -101,11 +101,11 @@ pub async fn delete_pvc(c: &Client, name: &str) -> Result<()> {
     }
 }
 
-/// Discord guild recorded on a world's PVC; it outlives the server when /delete keeps the world.
-pub async fn pvc_guild_id(c: &Client, name: &str) -> Result<Option<String>> {
+/// A world's PVC; it outlives the server when /delete keeps the world.
+pub async fn get_pvc(c: &Client, name: &str) -> Result<Option<PersistentVolumeClaim>> {
     let api: Api<PersistentVolumeClaim> = Api::namespaced(c.clone(), NS);
     match api.get(name).await {
-        Ok(p) => Ok(p.metadata.annotations.and_then(|a| a.get(GUILD_ID).cloned())),
+        Ok(p) => Ok(Some(p)),
         Err(kube::Error::Api(ae)) if ae.code == 404 => Ok(None),
         Err(e) => Err(e.into()),
     }
@@ -157,6 +157,10 @@ fn annotation(d: &Deployment, key: &str) -> Option<String> {
 
 pub fn guild_id(d: &Deployment) -> Option<String> {
     annotation(d, GUILD_ID)
+}
+
+pub fn pvc_guild_id(p: &PersistentVolumeClaim) -> Option<String> {
+    p.metadata.annotations.as_ref()?.get(GUILD_ID).cloned()
 }
 
 pub fn channel_id(d: &Deployment) -> Option<String> {
