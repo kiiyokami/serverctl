@@ -30,12 +30,6 @@ echo ""
 echo "==> Applying namespace"
 kubectl apply -f "$REPO_ROOT/k8s/namespace.yaml"
 
-echo "==> Deploying idle watcher (auto-shutdown after 5 min with no players)"
-kubectl apply -f "$REPO_ROOT/k8s/idle-watcher/rbac.yaml"
-kubectl apply -f "$REPO_ROOT/k8s/idle-watcher/state-configmap.yaml"
-kubectl apply -f "$REPO_ROOT/k8s/idle-watcher/script-configmap.yaml"
-kubectl apply -f "$REPO_ROOT/k8s/idle-watcher/cronjob.yaml"
-
 echo ""
 echo "==> Done!"
 helm list -n games

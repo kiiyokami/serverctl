@@ -52,6 +52,11 @@ pub async fn patch_ttl(c: &Client, name: &str, ttl_seconds: u32) -> Result<()> {
     patch_annotations(c, name, json!({ "serverctl.io/ttl-seconds": ttl_seconds.to_string() })).await
 }
 
+/// Idle shutdown delay set by /ttl; 0 means never.
+pub fn ttl_secs(d: &Deployment) -> Option<u64> {
+    annotation(d, "serverctl.io/ttl-seconds")?.parse().ok()
+}
+
 pub async fn running_server_count(c: &Client) -> Result<u32> {
     Ok(list_deployments(c)
         .await?
@@ -148,7 +153,7 @@ pub fn channel_id(d: &Deployment) -> Option<String> {
     annotation(d, "serverctl.io/discord-channel-id")
 }
 
-/// True when the last scale-down came from /stop or server.sh, not the idle watcher.
+/// True when the last scale-down came from /stop, not idle shutdown.
 pub fn stopped_by_user(d: &Deployment) -> bool {
     annotation(d, STOPPED_BY).as_deref() == Some("user")
 }

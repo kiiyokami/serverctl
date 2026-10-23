@@ -16,7 +16,7 @@ serverctl runs Minecraft servers for a group of friends on a home k3s cluster. Y
 # 1. Set up k3s on the home server
 bash scripts/install-k3s.sh
 
-# 2. Deploy the cluster (namespace, idle watcher)
+# 2. Deploy the cluster (namespace)
 bash scripts/apply-manifests.sh
 
 # 3. Set the Discord bot token and public domain
@@ -53,7 +53,7 @@ All server management is done through Discord slash commands. Servers are scoped
 | `/ttl <name> <minutes>` | Set idle-shutdown timeout. `0` disables auto-shutdown. |
 | `/delete <name> [purge]` | Delete a server. `purge: true` also wipes world data. |
 
-Servers auto-shut down after 5 minutes with no players. The idle watcher checks every 2 minutes via Minecraft's Server List Ping.
+Servers auto-shut down after 5 minutes with no players. The bot checks every 30 seconds via Minecraft's Server List Ping and posts a notice in the channel the server was started from.
 
 Up to 2 servers run at once. Starting a third is rejected until one is stopped.
 
