@@ -42,8 +42,8 @@ All server management is done through Discord slash commands. Servers are scoped
 
 | Command | Description |
 |---------|-------------|
-| `/create <type> [start_now]` | Opens a form for the name, Minecraft version, world seed, and mods. `type` is Vanilla, Fabric, Forge, or Paper. The version also picks the matching Java image (Java 8 through 25). Mods accepts comma-separated Modrinth/CurseForge mod or modpack URLs (a CurseForge file link such as `.../modpacks/<pack>/files/<id>` pins that version, and a server-pack file link runs the server pack), `modrinth.com/plugin/...` links (Paper only), or direct `.jar` URLs (installed as plugins on Paper). The seed is random if left blank. `start_now: false` only creates the config; start it later with `/start`. |
-| `/settings <name> [gamemode] [difficulty]` | Set the default game mode and difficulty in `server.properties`, or show them when no option is given. Takes effect on next start. |
+| `/create <type>` | Opens a form for the name, Minecraft version, world seed, and mods, then a panel to pick game mode, difficulty, offline mode, hardcore, and PvP before creating it (with or without starting). `type` is Vanilla, Fabric, Forge, or Paper. The version also picks the matching Java image (Java 8 through 25). Mods accepts comma-separated Modrinth/CurseForge mod or modpack URLs (a CurseForge file link such as `.../modpacks/<pack>/files/<id>` pins that version, and a server-pack file link runs the server pack), `modrinth.com/plugin/...` links (Paper only), or direct `.jar` URLs (installed as plugins on Paper). The seed is random if left blank. |
+| `/settings <name> [gamemode] [difficulty] [offline_mode] [hardcore] [pvp]` | Change gameplay settings, or show them when no option is given. Takes effect on next start. |
 | `/start <name>` | Start a stopped server. |
 | `/stop <name>` | Stop a running server (world data preserved). |
 | `/status <name>` | Show player count, uptime, version, and connect address. |

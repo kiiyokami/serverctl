@@ -1,7 +1,7 @@
 use crate::{auth, kube as k, reply, values, Context, Error};
 use poise::ChoiceParameter;
 
-#[derive(Debug, ChoiceParameter)]
+#[derive(Debug, Clone, Copy, PartialEq, ChoiceParameter)]
 pub enum GameMode {
     Survival,
     Creative,
@@ -20,7 +20,7 @@ impl GameMode {
     }
 }
 
-#[derive(Debug, ChoiceParameter)]
+#[derive(Debug, Clone, Copy, PartialEq, ChoiceParameter)]
 pub enum Difficulty {
     Peaceful,
     Easy,
@@ -39,17 +39,54 @@ impl Difficulty {
     }
 }
 
-/// itzg writes MODE/DIFFICULTY into server.properties; omitted choices keep its defaults.
-fn apply_gameplay(v: &mut values::Values, mode: Option<&GameMode>, difficulty: Option<&Difficulty>) {
-    let pairs = [
-        ("MODE", mode.map(GameMode::env_value)),
-        ("DIFFICULTY", difficulty.map(Difficulty::env_value)),
-    ];
-    for (key, value) in pairs {
-        if let Some(value) = value {
-            v.extra_env
-                .get_or_insert_with(serde_yaml::Mapping::new)
-                .insert(key.into(), value.into());
+/// Gameplay settings shared by /create and /settings; `None` keeps the server's current value.
+#[derive(Debug, Default, Clone)]
+pub struct Gameplay {
+    pub mode: Option<GameMode>,
+    pub difficulty: Option<Difficulty>,
+    pub offline: Option<bool>,
+    pub hardcore: Option<bool>,
+    pub pvp: Option<bool>,
+}
+
+impl Gameplay {
+    /// What a new server gets unless the creator changes it.
+    pub fn new_server() -> Self {
+        Self {
+            mode: Some(GameMode::Survival),
+            difficulty: Some(Difficulty::Easy),
+            offline: Some(false),
+            hardcore: Some(false),
+            pvp: Some(true),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.mode.is_none()
+            && self.difficulty.is_none()
+            && self.offline.is_none()
+            && self.hardcore.is_none()
+            && self.pvp.is_none()
+    }
+
+    /// itzg writes these env vars into server.properties on every start.
+    pub fn apply(&self, v: &mut values::Values) {
+        let bool_str = |b: bool| if b { "true" } else { "false" };
+        let pairs = [
+            ("MODE", self.mode.map(|m| m.env_value())),
+            ("DIFFICULTY", self.difficulty.map(|d| d.env_value())),
+            ("HARDCORE", self.hardcore.map(bool_str)),
+            ("PVP", self.pvp.map(bool_str)),
+        ];
+        for (key, value) in pairs {
+            if let Some(value) = value {
+                v.extra_env
+                    .get_or_insert_with(serde_yaml::Mapping::new)
+                    .insert(key.into(), value.into());
+            }
+        }
+        if let Some(offline) = self.offline {
+            v.server.online_mode = !offline;
         }
     }
 }
@@ -58,6 +95,24 @@ fn env<'a>(v: &'a values::Values, key: &str) -> Option<&'a str> {
     v.extra_env.as_ref()?.get(key)?.as_str()
 }
 
+/// One-line summary of a server's gameplay settings.
+pub fn describe(v: &values::Values) -> String {
+    let on_off = |b: bool| if b { "on" } else { "off" };
+    format!(
+        "Game mode: **{}** · Difficulty: **{}**\nOffline mode: **{}** · Hardcore: **{}** · PvP: **{}**",
+        env(v, "MODE").unwrap_or("survival"),
+        env(v, "DIFFICULTY").unwrap_or("easy"),
+        on_off(!v.server.online_mode),
+        on_off(env(v, "HARDCORE") == Some("true")),
+        on_off(env(v, "PVP") != Some("false")),
+    )
+}
+
+/// Shown whenever offline mode is on: the server stops checking Mojang accounts.
+pub const OFFLINE_WARNING: &str =
+    "⚠️ Offline mode lets anyone join under any username, including yours.";
+
+#[allow(clippy::too_many_arguments)]
 #[poise::command(slash_command, guild_only)]
 pub async fn settings(
     ctx: Context<'_>,
@@ -66,6 +121,9 @@ pub async fn settings(
     name: String,
     #[description = "Default game mode for players"] gamemode: Option<GameMode>,
     #[description = "World difficulty"] difficulty: Option<Difficulty>,
+    #[description = "Let players join without a Mojang account check"] offline_mode: Option<bool>,
+    #[description = "Hardcore: one life, difficulty locked to hard"] hardcore: Option<bool>,
+    #[description = "Players can hurt each other"] pvp: Option<bool>,
 ) -> Result<(), Error> {
     ctx.defer().await?;
     let guild = ctx.guild_id().map(|g| g.to_string()).unwrap_or_default();
@@ -77,22 +135,19 @@ pub async fn settings(
 
     let path = values::path_for(&name);
     let mut v = values::read(&path)?;
-    let changed = gamemode.is_some() || difficulty.is_some();
-    if changed {
-        apply_gameplay(&mut v, gamemode.as_ref(), difficulty.as_ref());
+    let change = Gameplay { mode: gamemode, difficulty, offline: offline_mode, hardcore, pvp };
+    if !change.is_empty() {
+        change.apply(&mut v);
         values::write(&path, &v)?;
     }
-    let current = format!(
-        "Game mode: **{}** · Difficulty: **{}**",
-        env(&v, "MODE").unwrap_or("survival"),
-        env(&v, "DIFFICULTY").unwrap_or("easy"),
-    );
-    let msg = if changed {
-        reply::ok(format!(
-            "✅ Saved for **`{name}`**.\n{current}\nApplies on the next `/start`."
-        ))
+    let mut body = describe(&v);
+    if !v.server.online_mode {
+        body = format!("{body}\n{OFFLINE_WARNING}");
+    }
+    let msg = if change.is_empty() {
+        reply::info(format!("**`{name}`**\n{body}"))
     } else {
-        reply::info(format!("**`{name}`**\n{current}"))
+        reply::ok(format!("✅ Saved for **`{name}`**.\n{body}\nApplies on the next `/start`."))
     };
     ctx.send(msg).await?;
     Ok(())
@@ -112,16 +167,27 @@ mod tests {
     #[test]
     fn gameplay_choices_set_mode_and_difficulty() {
         let mut v = base();
-        apply_gameplay(&mut v, Some(&GameMode::Creative), Some(&Difficulty::Peaceful));
+        let g = Gameplay {
+            mode: Some(GameMode::Creative),
+            difficulty: Some(Difficulty::Peaceful),
+            offline: Some(true),
+            hardcore: Some(true),
+            pvp: Some(false),
+        };
+        g.apply(&mut v);
         assert_eq!(env(&v, "MODE"), Some("creative"));
         assert_eq!(env(&v, "DIFFICULTY"), Some("peaceful"));
+        assert_eq!(env(&v, "HARDCORE"), Some("true"));
+        assert_eq!(env(&v, "PVP"), Some("false"));
+        assert!(!v.server.online_mode);
     }
 
     #[test]
     fn omitted_gameplay_choices_leave_server_defaults() {
         let mut v = base();
-        apply_gameplay(&mut v, None, None);
+        Gameplay::default().apply(&mut v);
         assert!(v.extra_env.is_none());
+        assert!(v.server.online_mode);
     }
 
     #[test]

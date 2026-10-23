@@ -39,8 +39,13 @@ pub fn failure(command: &str, error: &dyn std::fmt::Display) -> poise::CreateRep
 }
 
 /// Replace an interaction's (deferred) response using its token.
-pub async fn edit(http: &serenity::Http, token: &str, reply: poise::CreateReply) -> serenity::Result<()> {
+/// Buttons and menus are cleared unless `reply` sets its own.
+pub async fn edit(
+    http: &serenity::Http,
+    token: &str,
+    mut reply: poise::CreateReply,
+) -> serenity::Result<serenity::Message> {
+    reply.components.get_or_insert_with(Vec::new);
     let body = reply.to_slash_initial_response_edit(serenity::EditInteractionResponse::new());
-    http.edit_original_interaction_response(token, &body, vec![]).await?;
-    Ok(())
+    http.edit_original_interaction_response(token, &body, vec![]).await
 }
