@@ -197,7 +197,7 @@ async fn run(
     }
     choice.apply(&mut v);
     // Picked only now so a second /create waiting on its panel can't take the same port.
-    let client = k::client().await?;
+    let client = ctx.data().kube.clone();
     let mut used_ports = k::used_node_ports(&client).await?;
     used_ports.extend(values::local_node_ports());
     v.node_port = values::next_free_node_port(&used_ports)?;
@@ -239,7 +239,7 @@ async fn prepare(
         return Ok(Err(format!("`{name}` already exists. Pick another name.")));
     }
 
-    let client = k::client().await?;
+    let client = ctx.data().kube.clone();
     let template = values::templates_dir().join(format!("{}.yaml", kind.template_name()));
     let mut v: values::Values = serde_yaml::from_str(&std::fs::read_to_string(&template)?)?;
     v.name = name.to_string();

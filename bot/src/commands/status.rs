@@ -57,7 +57,7 @@ pub async fn status(
 ) -> Result<(), Error> {
     ctx.defer().await?;
     let guild = ctx.guild_id().map(|g| g.to_string()).unwrap_or_default();
-    let client = k::client().await?;
+    let client = ctx.data().kube.clone();
     if !auth::guild_owns(&client, &guild, &name).await? {
         ctx.send(reply::unknown_server(&name)).await?;
         return Ok(());

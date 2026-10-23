@@ -13,7 +13,9 @@ mod reply;
 mod values;
 mod watcher;
 
-pub struct Data {}
+pub struct Data {
+    pub kube: ::kube::Client,
+}
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
 
@@ -47,6 +49,7 @@ async fn main() -> Result<()> {
         .init();
 
     let token = std::env::var("DISCORD_TOKEN")?;
+    let kube = kube::client().await?;
     let intents = serenity::GatewayIntents::non_privileged();
 
     let framework = poise::Framework::builder()
@@ -68,10 +71,10 @@ async fn main() -> Result<()> {
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
-            tokio::spawn(watcher::run(ctx.clone()));
+            tokio::spawn(watcher::run(ctx.clone(), kube.clone()));
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(Data {})
+                Ok(Data { kube })
             })
         })
         .build();

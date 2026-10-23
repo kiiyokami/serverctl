@@ -1,4 +1,4 @@
-use crate::{auth, kube as k, reply, values, Context, Error};
+use crate::{auth, reply, values, Context, Error};
 use poise::ChoiceParameter;
 
 #[derive(Debug, Clone, Copy, PartialEq, ChoiceParameter)]
@@ -127,7 +127,7 @@ pub async fn settings(
 ) -> Result<(), Error> {
     ctx.defer().await?;
     let guild = ctx.guild_id().map(|g| g.to_string()).unwrap_or_default();
-    let client = k::client().await?;
+    let client = ctx.data().kube.clone();
     if !auth::guild_owns(&client, &guild, &name).await? {
         ctx.send(reply::unknown_server(&name)).await?;
         return Ok(());

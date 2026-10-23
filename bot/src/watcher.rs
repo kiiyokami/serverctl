@@ -2,7 +2,7 @@ use crate::{kube as k, minecraft, reply};
 use poise::serenity_prelude as serenity;
 use std::collections::HashMap;
 
-pub async fn run(ctx: serenity::Context) {
+pub async fn run(ctx: serenity::Context, client: kube::Client) {
     let http = &ctx.http;
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
     let mut last: HashMap<String, u32> = HashMap::new();
@@ -10,10 +10,6 @@ pub async fn run(ctx: serenity::Context) {
 
     loop {
         interval.tick().await;
-        let client = match k::client().await {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
         let deps = match k::list_deployments(&client).await {
             Ok(d) => d,
             Err(_) => continue,

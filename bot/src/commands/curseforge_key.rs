@@ -14,7 +14,7 @@ pub async fn curseforge_key(
     }
 
     let user_id = ctx.author().id.to_string();
-    let client = k::client().await?;
+    let client = ctx.data().kube.clone();
     k::set_curseforge_key(&client, &user_id, &key).await?;
 
     let mut msg = "✅ Saved your CurseForge API key. It'll be used for CurseForge packs and mods you add.\n\

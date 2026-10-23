@@ -5,7 +5,7 @@ use std::collections::HashSet;
 pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer().await?;
     let guild = ctx.guild_id().map(|g| g.to_string()).unwrap_or_default();
-    let client = k::client().await?;
+    let client = ctx.data().kube.clone();
     let deps = k::list_deployments(&client).await?;
     let mut lines = Vec::new();
     let mut seen = HashSet::new();
