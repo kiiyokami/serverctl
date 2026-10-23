@@ -1,12 +1,8 @@
 # serverctl
 
-> Running game servers with friends shouldn't require a sysadmin.
+serverctl runs Minecraft servers for a group of friends on a home k3s cluster. You create, start, stop, and delete servers with Discord slash commands instead of SSHing into a box and editing YAML.
 
-## Motivation
-
-Spinning up a Minecraft server for friends used to mean SSHing into a box, editing YAML, and hoping nothing broke. serverctl wraps all of that behind Discord slash commands — create, start, stop, and delete servers without leaving the chat.
-
-## Quick Start
+## Quick start
 
 ### Requirements
 
@@ -31,7 +27,7 @@ $EDITOR k8s/discord-bot/secret.yaml
 bash scripts/install-bot.sh
 ```
 
-Set up nginx on your VPS to proxy ports 25565–25568 to your home server's NodePorts:
+Set up nginx on your VPS to proxy ports 25565-25568 to your home server's NodePorts:
 
 ```bash
 sed "s/<WG_HOME_IP>/$(ip -4 -o addr show wg0 | awk '{print $4}' | cut -d/ -f1)/" \
@@ -52,15 +48,15 @@ All server management is done through Discord slash commands. Servers are scoped
 | `/status <name>` | Show player count, uptime, version, and connect address. |
 | `/list` | List all servers in the guild. |
 | `/mods <name> <url>` | Add mods, a modpack, or Paper plugins (comma-separated Modrinth/CurseForge/JAR URLs). Takes effect on next start. |
-| `/curseforge-key <key>` | Save your personal CurseForge API key (required for CurseForge packs/mods). Get one at [console.curseforge.com](https://console.curseforge.com/) — it starts with `$2a$10$`. |
+| `/curseforge-key <key>` | Save your personal CurseForge API key (required for CurseForge packs/mods). Get one at [console.curseforge.com](https://console.curseforge.com/); it starts with `$2a$10$`. |
 | `/ttl <name> <minutes>` | Set idle-shutdown timeout. `0` disables auto-shutdown. |
 | `/delete <name> [purge]` | Delete a server. `purge: true` also wipes world data. |
 
 Servers auto-shut down after 5 minutes with no players. The idle watcher checks every 2 minutes via Minecraft's Server List Ping.
 
-Up to **2 servers** run concurrently. Starting a third is rejected until one is stopped.
+Up to 2 servers run at once. Starting a third is rejected until one is stopped.
 
-The bot replies with a "starting" embed that **updates in-place** to "ready" once the server is up.
+The bot's "starting" embed updates in place to "ready" once the server is up.
 
 ## Contributing
 
@@ -82,4 +78,4 @@ Deploy to k3s after changes:
 bash scripts/install-bot.sh
 ```
 
-If you'd like to contribute, please fork the repository and open a pull request.
+To contribute, fork the repo and open a pull request.
