@@ -4,6 +4,9 @@ kind: PersistentVolumeClaim
 metadata:
   name: {{ .Values.name }}-data
   namespace: games
+  # helm uninstall would otherwise delete the world; /delete purge:true removes it explicitly.
+  annotations:
+    helm.sh/resource-policy: keep
 spec:
   accessModes:
     - ReadWriteOnce
