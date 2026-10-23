@@ -49,8 +49,7 @@ async fn main() -> Result<()> {
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
-            let http = std::sync::Arc::clone(&ctx.http);
-            tokio::spawn(watcher::run(http));
+            tokio::spawn(watcher::run(ctx.clone()));
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 Ok(Data {})
