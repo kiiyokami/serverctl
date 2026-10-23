@@ -26,9 +26,6 @@ spec:
               value: /serverctl
             - name: RUST_LOG
               value: info
-            # Public domain shown to users in /status, /list, etc. (e.g. "mc.example.com").
-            - name: PUBLIC_DOMAIN
-              value: REPLACE_ME_DOMAIN
           resources:
             requests:
               memory: "64Mi"
@@ -42,6 +39,6 @@ spec:
       volumes:
         - name: serverctl-repo
           hostPath:
-            # Adjust to match the path of this repo on your home server.
+            # install-bot.sh replaces this with the repo's real path at apply time.
             path: /home/REPLACE_ME/serverctl
             type: Directory

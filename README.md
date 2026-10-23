@@ -19,7 +19,7 @@ bash scripts/install-k3s.sh
 # 2. Deploy the cluster (namespace, idle watcher)
 bash scripts/apply-manifests.sh
 
-# 3. Configure the Discord bot token
+# 3. Set the Discord bot token and public domain
 cp k8s/discord-bot/secret-template.yaml k8s/discord-bot/secret.yaml
 $EDITOR k8s/discord-bot/secret.yaml
 

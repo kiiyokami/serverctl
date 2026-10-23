@@ -10,9 +10,10 @@ if [[ ! -f "$REPO_ROOT/k8s/discord-bot/secret.yaml" ]]; then
   exit 1
 fi
 
-if grep -q REPLACE_ME "$REPO_ROOT/k8s/discord-bot/deployment.yaml"; then
-  echo "ERROR: $REPO_ROOT/k8s/discord-bot/deployment.yaml has REPLACE_ME placeholder."
-  echo "  Edit the hostPath.path to your repo's absolute location on this machine."
+if ! grep -q PUBLIC_DOMAIN "$REPO_ROOT/k8s/discord-bot/secret.yaml" \
+  || grep -q '<your-' "$REPO_ROOT/k8s/discord-bot/secret.yaml"; then
+  echo "ERROR: $REPO_ROOT/k8s/discord-bot/secret.yaml needs DISCORD_TOKEN and PUBLIC_DOMAIN filled in."
+  echo "  See secret-template.yaml."
   exit 1
 fi
 
@@ -27,7 +28,7 @@ docker save serverctl-bot:dev | sudo k3s ctr images import -
 echo "==> Applying manifests"
 kubectl apply -f "$REPO_ROOT/k8s/discord-bot/rbac.yaml"
 kubectl apply -f "$REPO_ROOT/k8s/discord-bot/secret.yaml"
-kubectl apply -f "$REPO_ROOT/k8s/discord-bot/deployment.yaml"
+sed "s|/home/REPLACE_ME/serverctl|$REPO_ROOT|" "$REPO_ROOT/k8s/discord-bot/deployment.yaml" | kubectl apply -f -
 
 echo "==> Restarting bot to pick up the new image"
 kubectl rollout restart deployment/minecraft-discord-bot -n games
