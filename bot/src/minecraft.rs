@@ -59,21 +59,41 @@ pub async fn ping(server: &str) -> Option<ServerStatus> {
             break;
         }
         match tokio::time::timeout(remaining, stream.read(&mut buf)).await {
-            Ok(Ok(0)) | Err(_) => break,
+            Ok(Ok(0)) | Err(_) | Ok(Err(_)) => break,
             Ok(Ok(n)) => {
                 data.extend_from_slice(&buf[..n]);
-                let opens = data.iter().filter(|&&b| b == b'{').count();
-                let closes = data.iter().filter(|&&b| b == b'}').count();
-                if opens > 0 && opens == closes {
+                if status_json(&data).is_some() {
                     break;
                 }
             }
-            Ok(Err(_)) => break,
         }
     }
+    parse_status(&data)
+}
 
-    let start = data.iter().position(|&b| b == b'{')?;
-    let json: serde_json::Value = serde_json::from_slice(&data[start..]).ok()?;
+fn read_varint(buf: &[u8]) -> Option<(u32, usize)> {
+    let mut n = 0u32;
+    for (i, &byte) in buf.iter().enumerate().take(5) {
+        n |= u32::from(byte & 0x7F) << (7 * i);
+        if byte & 0x80 == 0 {
+            return Some((n, i + 1));
+        }
+    }
+    None
+}
+
+/// The JSON of a status response, once `data` holds the whole packet:
+/// length, packet ID, then a length-prefixed string.
+fn status_json(data: &[u8]) -> Option<&[u8]> {
+    let (len, a) = read_varint(data)?;
+    let packet = data.get(a..a.checked_add(len as usize)?)?;
+    let (_id, b) = read_varint(packet)?;
+    let (json_len, c) = read_varint(&packet[b..])?;
+    packet.get(b + c..(b + c).checked_add(json_len as usize)?)
+}
+
+fn parse_status(data: &[u8]) -> Option<ServerStatus> {
+    let json: serde_json::Value = serde_json::from_slice(status_json(data)?).ok()?;
     let online = json["players"]["online"].as_u64()? as u32;
     let max = json["players"]["max"].as_u64().unwrap_or(20) as u32;
     Some(ServerStatus { online, max })
@@ -86,5 +106,33 @@ pub fn format_uptime(secs: i64) -> String {
         format!("{}m", secs / 60)
     } else {
         format!("{}h {}m", secs / 3600, (secs % 3600) / 60)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn packet(json: &str) -> Vec<u8> {
+        let mut body = varint(0x00);
+        body.extend(varint(json.len() as u32));
+        body.extend_from_slice(json.as_bytes());
+        let mut out = varint(body.len() as u32);
+        out.extend(body);
+        out
+    }
+
+    #[test]
+    fn reads_players_even_with_braces_in_motd() {
+        let data = packet(r#"{"description":{"text":"{SMP"},"players":{"online":3,"max":10}}"#);
+        let s = parse_status(&data).unwrap();
+        assert_eq!((s.online, s.max), (3, 10));
+    }
+
+    #[test]
+    fn waits_for_the_whole_packet() {
+        let data = packet(&format!(r#"{{"favicon":"{}","players":{{"online":1,"max":5}}}}"#, "a".repeat(20_000)));
+        assert!(status_json(&data[..4096]).is_none());
+        assert_eq!(parse_status(&data).unwrap().online, 1);
     }
 }
