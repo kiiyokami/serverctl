@@ -9,5 +9,5 @@ spec:
     app: {{ .Values.name }}
   ports:
     - port: 25565
-      targetPort: 25565
+      targetPort: {{ include "minecraft.port" . }}
       nodePort: {{ .Values.nodePort }}

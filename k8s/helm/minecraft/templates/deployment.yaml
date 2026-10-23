@@ -21,6 +21,7 @@ spec:
       labels:
         app: {{ .Values.name }}
     spec:
+      # Host network shares the node's ports, so each server listens on its own port.
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
       {{- if .Values.cfApiKeyUser }}
@@ -91,6 +92,10 @@ spec:
             - name: MEMORY
               value: {{ .Values.server.memory | quote }}
             {{- end }}
+            {{- if not (hasKey $extra "SERVER_PORT") }}
+            - name: SERVER_PORT
+              value: {{ include "minecraft.port" . | quote }}
+            {{- end }}
             {{- if not (hasKey $extra "ONLINE_MODE") }}
             - name: ONLINE_MODE
               value: {{ .Values.server.onlineMode | ternary "TRUE" "FALSE" | quote }}
@@ -123,7 +128,7 @@ spec:
               value: {{ $v | quote }}
             {{- end }}
           ports:
-            - containerPort: 25565
+            - containerPort: {{ include "minecraft.port" . }}
           resources:
             requests:
               memory: {{ .Values.resources.requests.memory | quote }}
@@ -133,17 +138,17 @@ spec:
               cpu: {{ .Values.resources.limits.cpu | quote }}
           startupProbe:
             tcpSocket:
-              port: 25565
+              port: {{ include "minecraft.port" . }}
             initialDelaySeconds: 30
             periodSeconds: 10
             failureThreshold: 60
           readinessProbe:
             tcpSocket:
-              port: 25565
+              port: {{ include "minecraft.port" . }}
             periodSeconds: 10
           livenessProbe:
             tcpSocket:
-              port: 25565
+              port: {{ include "minecraft.port" . }}
             periodSeconds: 30
             failureThreshold: 5
           volumeMounts:
