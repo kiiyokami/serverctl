@@ -92,7 +92,13 @@ pub async fn create(
         return Ok(());
     };
     // The modal used up the slash command's response, so reply through the submission instead.
-    submit.defer(ctx.http()).await?;
+    // Not submit.defer(): that only acknowledges, leaving no message to edit later ("Unknown Message").
+    submit
+        .create_response(
+            ctx.http(),
+            serenity::CreateInteractionResponse::Defer(serenity::CreateInteractionResponseMessage::new()),
+        )
+        .await?;
     // Each click is a new interaction; later edits use the latest token, which lasts 15 minutes.
     let mut token = submit.token.clone();
     if let Err(e) = run(ctx, &submit, &kind, &mut token).await {
