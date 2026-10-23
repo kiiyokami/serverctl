@@ -2,7 +2,7 @@ use crate::{kube as k, values};
 use anyhow::Result;
 
 pub async fn guild_owns(client: &kube::Client, guild_id: &str, server_name: &str) -> Result<bool> {
-    // DMs have no guild; "" would match configs written without discordGuildId (server.sh).
+    // DMs have no guild; "" would match configs written without discordGuildId.
     if guild_id.is_empty() {
         return Ok(false);
     }
