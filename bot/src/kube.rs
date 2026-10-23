@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 const NS: &str = "games";
 const CF_KEYS_SECRET: &str = "curseforge-keys";
 const STOPPED_BY: &str = "serverctl.io/stopped-by";
+const GUILD_ID: &str = "serverctl.io/discord-guild-id";
 
 pub async fn client() -> Result<Client> {
     Ok(Client::try_default().await?)
@@ -100,6 +101,16 @@ pub async fn delete_pvc(c: &Client, name: &str) -> Result<()> {
     }
 }
 
+/// Discord guild recorded on a world's PVC; it outlives the server when /delete keeps the world.
+pub async fn pvc_guild_id(c: &Client, name: &str) -> Result<Option<String>> {
+    let api: Api<PersistentVolumeClaim> = Api::namespaced(c.clone(), NS);
+    match api.get(name).await {
+        Ok(p) => Ok(p.metadata.annotations.and_then(|a| a.get(GUILD_ID).cloned())),
+        Err(kube::Error::Api(ae)) if ae.code == 404 => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
 pub async fn get_curseforge_key(c: &Client, user_id: &str) -> Result<Option<String>> {
     let api: Api<Secret> = Api::namespaced(c.clone(), NS);
     match api.get(CF_KEYS_SECRET).await {
@@ -145,7 +156,7 @@ fn annotation(d: &Deployment, key: &str) -> Option<String> {
 }
 
 pub fn guild_id(d: &Deployment) -> Option<String> {
-    annotation(d, "serverctl.io/discord-guild-id")
+    annotation(d, GUILD_ID)
 }
 
 pub fn channel_id(d: &Deployment) -> Option<String> {

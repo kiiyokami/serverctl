@@ -16,11 +16,23 @@ pub async fn delete(
     ctx.defer().await?;
     let guild = ctx.guild_id().map(|g| g.to_string()).unwrap_or_default();
     let client = ctx.data().kube.clone();
-    if !auth::guild_owns(&client, &guild, &name).await? {
-        ctx.send(reply::unknown_server(&name)).await?;
-        return Ok(());
-    }
     let purge = purge.unwrap_or(false);
+    if !auth::guild_owns(&client, &guild, &name).await? {
+        // The server may be gone with its world kept; the world can still be purged.
+        let world_owner = k::pvc_guild_id(&client, &format!("{name}-data")).await?;
+        if guild.is_empty() || world_owner.as_deref() != Some(guild.as_str()) {
+            ctx.send(reply::unknown_server(&name)).await?;
+            return Ok(());
+        }
+        if !purge {
+            ctx.send(reply::info(format!(
+                "Only the world of **`{name}`** is left. Delete it with `/delete {name} purge:true`, \
+                 or `/create` a server named `{name}` to reuse it."
+            )))
+            .await?;
+            return Ok(());
+        }
+    }
 
     let handle = if purge {
         let prompt = reply::err(format!(

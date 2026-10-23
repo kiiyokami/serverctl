@@ -7,6 +7,10 @@ metadata:
   # helm uninstall would otherwise delete the world; /delete purge:true removes it explicitly.
   annotations:
     helm.sh/resource-policy: keep
+    {{- if .Values.discordGuildId }}
+    # Lets /delete purge:true find a kept world's owner after its server is gone.
+    serverctl.io/discord-guild-id: {{ .Values.discordGuildId | quote }}
+    {{- end }}
 spec:
   accessModes:
     - ReadWriteOnce
