@@ -76,7 +76,8 @@ pub async fn apply_mod_url(
         if !is_paper {
             return Ok(ModResult::Rejected(format!(
                 "Plugins need a Paper server; `{}` is {}.",
-                v.name, v.server.kind
+                v.name,
+                values::kind_label(&v.server.kind)
             )));
         }
         let slug = c.get(1).unwrap().as_str().to_string();
@@ -164,7 +165,12 @@ pub async fn apply_mod_urls(
                 cf_files.push((slug, file_id, page));
             }
             ModResult::Rejected(msg) => return Ok(Err(msg)),
-            ModResult::Unrecognized => return Ok(Err(format!("Unrecognized URL: `{u}`"))),
+            ModResult::Unrecognized => {
+                return Ok(Err(format!(
+                    "`{u}` isn't a link I can use. Send a Modrinth or CurseForge mod or modpack page, \
+                     a `modrinth.com/plugin/...` page, or a direct `.jar` link."
+                )))
+            }
         }
     }
     if !needs_cf_key {
@@ -213,7 +219,7 @@ pub async fn mods(
     match apply_mod_urls(&mut v, &client, &user_id, &url).await? {
         Ok(added) => {
             values::write(&path, &v)?;
-            ctx.send(reply::ok(format!("✅ Added {} to `{name}`.", added.join(", "))))
+            ctx.send(reply::ok(format!("✅ Added {} to **`{name}`**.", added.join(", "))))
                 .await?;
         }
         Err(msg) => {

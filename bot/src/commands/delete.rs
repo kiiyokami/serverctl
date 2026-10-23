@@ -1,4 +1,9 @@
+use crate::commands::{next_click, LivePrompt};
 use crate::{auth, helm, kube as k, reply, values, Context, Error};
+use poise::serenity_prelude as serenity;
+use std::time::Duration;
+
+const CONFIRM_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[poise::command(slash_command, guild_only, default_member_permissions = "MANAGE_GUILD")]
 pub async fn delete(
@@ -6,8 +11,7 @@ pub async fn delete(
     #[description = "Server name"]
     #[autocomplete = "super::server_names"]
     name: String,
-    #[description = "Also wipe world data PVC and local config (default: false)"]
-    purge: Option<bool>,
+    #[description = "Also delete the world forever (default: no)"] purge: Option<bool>,
 ) -> Result<(), Error> {
     ctx.defer().await?;
     let guild = ctx.guild_id().map(|g| g.to_string()).unwrap_or_default();
@@ -16,41 +20,75 @@ pub async fn delete(
         ctx.send(reply::unknown_server(&name)).await?;
         return Ok(());
     }
+    let purge = purge.unwrap_or(false);
 
-    let mut report = Vec::new();
+    let handle = if purge {
+        let prompt = reply::err(format!(
+            "Delete **`{name}`** and its world forever? This can't be undone."
+        ))
+        .components(vec![serenity::CreateActionRow::Buttons(vec![
+            serenity::CreateButton::new("purge").label("Delete forever").style(serenity::ButtonStyle::Danger),
+            serenity::CreateButton::new("keep").label("Cancel").style(serenity::ButtonStyle::Secondary),
+        ])]);
+        let handle = ctx.send(prompt).await?;
+        let msg = handle.message().await?.id;
+        let _live = LivePrompt::new(&ctx.data().live_prompts, msg);
+        let Some(click) = next_click(ctx, msg, CONFIRM_TIMEOUT).await? else {
+            handle
+                .edit(ctx, reply::info(format!("Timed out. **`{name}`** wasn't deleted.")).components(vec![]))
+                .await?;
+            return Ok(());
+        };
+        if click.data.custom_id != "purge" {
+            click
+                .create_response(ctx, reply::update(reply::info(format!("Cancelled. **`{name}`** wasn't deleted.")).components(vec![])))
+                .await?;
+            return Ok(());
+        }
+        click
+            .create_response(ctx, reply::update(reply::pending(format!("Deleting **`{name}`**…")).components(vec![])))
+            .await?;
+        Some(handle)
+    } else {
+        None
+    };
 
-    match helm::uninstall(&name).await {
-        Ok(()) => report.push("✅ Helm release uninstalled".to_string()),
-        Err(e) => report.push(format!("⚠️ Helm uninstall: {e}")),
+    let mut failed = Vec::new();
+    if let Err(e) = helm::uninstall(&name).await {
+        failed.push(format!("Uninstall: {e}"));
     }
-
-    match k::delete_deployment(&client, &name).await {
-        Ok(()) => report.push("✅ Deployment deleted".to_string()),
-        Err(e) => report.push(format!("⚠️ Deployment delete: {e}")),
+    if let Err(e) = k::delete_deployment(&client, &name).await {
+        failed.push(format!("Remove deployment: {e}"));
     }
-
-    let path = values::path_for(&name);
-    match std::fs::remove_file(&path) {
-        Ok(()) => report.push("✅ Local config removed".to_string()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => report.push(format!("⚠️ Config remove: {e}")),
+    match std::fs::remove_file(values::path_for(&name)) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => failed.push(format!("Remove config: {e}")),
+        _ => {}
     }
-
-    if purge.unwrap_or(false) {
+    let world = if purge {
         match k::delete_pvc(&client, &format!("{name}-data")).await {
-            Ok(()) => report.push(format!("✅ PVC `{name}-data` deleted (world data wiped)")),
-            Err(e) => report.push(format!("⚠️ PVC delete: {e}")),
+            Ok(()) => "World deleted.".to_string(),
+            Err(e) => {
+                failed.push(format!("Delete world: {e}"));
+                "World not deleted.".to_string()
+            }
         }
     } else {
-        report.push(
-            format!("ℹ️ World data kept. A new server named `{name}` will reuse it."),
-        );
-    }
+        format!("World kept: a new server named `{name}` will reuse it.")
+    };
 
-    ctx.send(reply::info(format!(
-        "**`{name}`**\n{}",
-        report.join("\n")
-    )))
-    .await?;
+    let msg = if failed.is_empty() {
+        reply::ok(format!("✅ Deleted **`{name}`**. {world}"))
+    } else {
+        reply::err(format!(
+            "⚠️ Deleting **`{name}`** didn't fully work. {world}\n{}",
+            failed.join("\n")
+        ))
+    };
+    match handle {
+        Some(h) => h.edit(ctx, msg.components(vec![])).await?,
+        None => {
+            ctx.send(msg).await?;
+        }
+    }
     Ok(())
 }

@@ -49,3 +49,19 @@ pub async fn edit(
     let body = reply.to_slash_initial_response_edit(serenity::EditInteractionResponse::new());
     http.edit_original_interaction_response(token, &body, vec![]).await
 }
+
+/// Response to a button click that replaces the message the button is on.
+pub fn update(reply: poise::CreateReply) -> serenity::CreateInteractionResponse {
+    serenity::CreateInteractionResponse::UpdateMessage(
+        reply.to_slash_initial_response(serenity::CreateInteractionResponseMessage::new()),
+    )
+}
+
+/// Response to a click that only the clicker sees.
+pub fn private(body: impl Into<String>) -> serenity::CreateInteractionResponse {
+    serenity::CreateInteractionResponse::Message(
+        serenity::CreateInteractionResponseMessage::new()
+            .embed(serenity::CreateEmbed::default().description(body).color(BLUE))
+            .ephemeral(true),
+    )
+}

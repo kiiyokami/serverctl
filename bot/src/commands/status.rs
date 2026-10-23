@@ -19,8 +19,8 @@ pub fn state(dep: Option<&Deployment>) -> State {
 /// One server's status line(s), shared by /status and /list.
 pub async fn describe(name: &str, dep: Option<&Deployment>, v: Option<&values::Values>) -> String {
     match state(dep) {
-        State::Stopped => format!("⚫ **`{name}`** — stopped"),
-        State::Starting => format!("🟡 **`{name}`** — starting…"),
+        State::Stopped => format!("⚫ **`{name}`** stopped"),
+        State::Starting => format!("🟡 **`{name}`** starting…"),
         State::Running => {
             let mut meta = Vec::new();
             if let Some(s) = minecraft::ping(name).await {
@@ -32,7 +32,7 @@ pub async fn describe(name: &str, dep: Option<&Deployment>, v: Option<&values::V
             if let Some(v) = v {
                 meta.push(values::summary(v));
             }
-            let mut out = format!("🟢 **`{name}`** — running");
+            let mut out = format!("🟢 **`{name}`** running");
             if !meta.is_empty() {
                 out.push_str(&format!("\n{}", meta.join(" · ")));
             }
@@ -69,7 +69,7 @@ pub async fn status(
     let msg = match state(dep.as_ref()) {
         State::Running => reply::ok(body),
         State::Starting => reply::pending(body),
-        State::Stopped => reply::info(body),
+        State::Stopped => reply::info(format!("{body}\nStart it with `/start {name}`.")),
     };
     ctx.send(msg).await?;
     Ok(())

@@ -24,7 +24,7 @@ pub async fn curseforge_key(
         // Valid CurseForge Eternal API keys are bcrypt strings; a different shape
         // usually means a legacy token, which AUTO_CURSEFORGE rejects.
         msg.push_str(
-            "\n\n⚠️ Heads up: valid keys start with `$2a$10$`. Yours doesn't — if downloads \
+            "\n\n⚠️ Heads up: valid keys start with `$2a$10$`. Yours doesn't. If downloads \
              fail, you likely grabbed a *legacy* token instead of a console.curseforge.com key.",
         );
     }

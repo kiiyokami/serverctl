@@ -15,6 +15,7 @@ mod watcher;
 
 pub struct Data {
     pub kube: ::kube::Client,
+    pub live_prompts: commands::LivePrompts,
 }
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
@@ -68,13 +69,16 @@ async fn main() -> Result<()> {
                 commands::settings::settings(),
             ],
             on_error: |error| Box::pin(on_error(error)),
+            event_handler: |ctx, event, _framework, data| {
+                Box::pin(commands::expire_stale_click(ctx, event, data))
+            },
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
             tokio::spawn(watcher::run(ctx.clone(), kube.clone()));
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(Data { kube })
+                Ok(Data { kube, live_prompts: Default::default() })
             })
         })
         .build();

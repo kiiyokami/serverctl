@@ -27,7 +27,8 @@ pub async fn uninstall(name: &str) -> Result<()> {
         .args(["uninstall", name, "-n", NAMESPACE])
         .output()
         .await?;
-    if !out.status.success() {
+    // A server created but never started has no release yet.
+    if !out.status.success() && !String::from_utf8_lossy(&out.stderr).contains("release: not found") {
         bail!(
             "helm uninstall failed: {}",
             String::from_utf8_lossy(&out.stderr)

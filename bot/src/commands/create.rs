@@ -1,4 +1,5 @@
 use crate::commands::settings::{Difficulty, GameMode, Gameplay, OFFLINE_WARNING};
+use crate::commands::{next_click, LivePrompt};
 use crate::{commands::{mods as mods_cmd, start}, kube as k, reply, values, Context, Error};
 use poise::serenity_prelude as serenity;
 use poise::{ChoiceParameter, Modal as _};
@@ -127,14 +128,10 @@ async fn run(
 
     let mut choice = Gameplay::new_server();
     let panel_msg = reply::edit(http, token, panel(&name, &v, &choice)).await?;
+    let _live = LivePrompt::new(&ctx.data().live_prompts, panel_msg.id);
     let start_now = loop {
-        let Some(click) = serenity::ComponentInteractionCollector::new(&ctx.serenity_context().shard)
-            .message_id(panel_msg.id)
-            .author_id(ctx.author().id)
-            .timeout(PANEL_TIMEOUT)
-            .await
-        else {
-            reply::edit(http, token, reply::info(format!("Timed out. `{name}` wasn't created."))).await?;
+        let Some(click) = next_click(ctx, panel_msg.id, PANEL_TIMEOUT).await? else {
+            reply::edit(http, token, reply::info(format!("Timed out. **`{name}`** wasn't created."))).await?;
             return Ok(());
         };
         let picked = match &click.data.kind {
@@ -171,17 +168,10 @@ async fn run(
         };
         let body = match next {
             None => panel(&name, &v, &choice),
-            Some(None) => reply::info(format!("Cancelled. `{name}` wasn't created.")).components(vec![]),
+            Some(None) => reply::info(format!("Cancelled. **`{name}`** wasn't created.")).components(vec![]),
             Some(Some(_)) => reply::pending(format!("Creating **`{name}`**…")).components(vec![]),
         };
-        click
-            .create_response(
-                http,
-                serenity::CreateInteractionResponse::UpdateMessage(
-                    body.to_slash_initial_response(serenity::CreateInteractionResponseMessage::new()),
-                ),
-            )
-            .await?;
+        click.create_response(http, reply::update(body)).await?;
         *token = click.token.clone();
         match next {
             None => continue,

@@ -18,12 +18,12 @@ pub async fn stop(
         .await?
         .is_some_and(|d| k::replicas(&d) > 0);
     if !running {
-        ctx.send(reply::info(format!("⚫ `{name}` is already stopped.")))
+        ctx.send(reply::info(format!("⚫ **`{name}`** is already stopped.")))
             .await?;
         return Ok(());
     }
     k::mark_stopped_by_user(&client, &name).await?;
     k::scale(&client, &name, 0).await?;
-    ctx.send(reply::ok(format!("⚫ `{name}` stopped."))).await?;
+    ctx.send(reply::ok(format!("⚫ **`{name}`** stopped."))).await?;
     Ok(())
 }

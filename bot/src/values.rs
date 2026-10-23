@@ -139,9 +139,16 @@ pub fn apply_seed(v: &mut Values, seed: &str) -> std::result::Result<(), String>
     Ok(())
 }
 
-/// Short "TYPE version • N mods • N plugins" label for Discord replies.
+/// Server type as players read it: "PAPER" becomes "Paper".
+pub fn kind_label(kind: &str) -> String {
+    let lower = kind.to_lowercase();
+    let mut chars = lower.chars();
+    chars.next().map_or_else(String::new, |c| c.to_uppercase().chain(chars).collect())
+}
+
+/// Short "Type version • N mods • N plugins" label for Discord replies.
 pub fn summary(v: &Values) -> String {
-    let mut s = format!("{} {}", v.server.kind, v.server.version);
+    let mut s = format!("{} {}", kind_label(&v.server.kind), v.server.version);
     if !v.server.mods.is_empty() {
         s.push_str(&format!(" • {} mods", v.server.mods.len()));
     }
@@ -180,6 +187,13 @@ pub fn next_free_node_port(used: &std::collections::HashSet<u32>) -> Result<u32>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn kind_label_title_cases() {
+        assert_eq!(kind_label("PAPER"), "Paper");
+        assert_eq!(kind_label("fabric"), "Fabric");
+        assert_eq!(kind_label(""), "");
+    }
 
     #[test]
     fn versions_up_to_1_16_get_java8() {
@@ -298,11 +312,11 @@ mod tests {
     #[test]
     fn summary_counts_mods_and_plugins() {
         let mut v = values_without_extra_env();
-        assert_eq!(summary(&v), "PAPER 1.21.4");
+        assert_eq!(summary(&v), "Paper 1.21.4");
         v.server.plugins = vec!["a.jar".into(), "b.jar".into()];
-        assert_eq!(summary(&v), "PAPER 1.21.4 • 2 plugins");
+        assert_eq!(summary(&v), "Paper 1.21.4 • 2 plugins");
         v.server.mods = vec!["m.jar".into()];
-        assert_eq!(summary(&v), "PAPER 1.21.4 • 1 mods • 2 plugins");
+        assert_eq!(summary(&v), "Paper 1.21.4 • 1 mods • 2 plugins");
     }
 
     #[test]
