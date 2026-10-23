@@ -1,6 +1,6 @@
 use crate::{auth, helm, kube as k, reply, values, Context, Error};
 
-#[poise::command(slash_command, guild_only)]
+#[poise::command(slash_command, guild_only, default_member_permissions = "MANAGE_GUILD")]
 pub async fn delete(
     ctx: Context<'_>,
     #[description = "Server name"]
