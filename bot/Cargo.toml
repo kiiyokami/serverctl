@@ -21,4 +21,4 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [profile.release]
 strip = true
-lto = true
+# No LTO: it re-optimizes every crate on each build (~100s vs ~12s) for a bot that isn't CPU-bound.
