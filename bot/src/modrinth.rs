@@ -27,13 +27,15 @@ fn version_query_url(slug: &str, loaders: &[&str], mc_version: &str) -> String {
 /// Newest version of `slug` built for any of `loaders` on `mc_version`.
 pub async fn latest_jar(slug: &str, loaders: &[&str], mc_version: &str) -> Result<(String, String)> {
     let url = version_query_url(slug, loaders, mc_version);
-    let versions: Vec<Version> = reqwest::Client::new()
+    let resp = reqwest::Client::new()
         .get(url)
         .header("User-Agent", "serverctl-bot")
         .send()
-        .await?
-        .json()
         .await?;
+    if resp.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(anyhow!("No Modrinth project `{slug}`. Check the link."));
+    }
+    let versions: Vec<Version> = resp.error_for_status()?.json().await?;
     let v = versions
         .into_iter()
         .next()
