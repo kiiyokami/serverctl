@@ -35,12 +35,3 @@ pub async fn uninstall(name: &str) -> Result<()> {
     }
     Ok(())
 }
-
-pub async fn release_exists(name: &str) -> Result<bool> {
-    Ok(Command::new("helm")
-        .args(["status", name, "-n", NAMESPACE])
-        .output()
-        .await?
-        .status
-        .success())
-}

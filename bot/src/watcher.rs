@@ -36,7 +36,7 @@ pub async fn run(ctx: serenity::Context) {
                 }
             }
             let prev = last.get(&name).copied().unwrap_or(replicas);
-            if prev > 0 && replicas == 0 {
+            if prev > 0 && replicas == 0 && !k::stopped_by_user(&dep) {
                 if let Some(ch_str) = k::channel_id(&dep) {
                     if let Ok(ch_id) = ch_str.parse::<u64>() {
                         let channel = serenity::ChannelId::new(ch_id);

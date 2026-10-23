@@ -13,6 +13,7 @@ pub async fn stop(
             .await?;
         return Ok(());
     }
+    k::mark_stopped_by_user(&client, &name).await?;
     k::scale(&client, &name, 0).await?;
     ctx.send(reply::ok(format!("⚫ `{name}` stopped."))).await?;
     Ok(())

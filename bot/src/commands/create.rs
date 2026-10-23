@@ -1,10 +1,6 @@
-use crate::{commands::mods as mods_cmd, config, helm, kube as k, reply, values, Context, Error};
+use crate::{commands::{mods as mods_cmd, start}, kube as k, reply, values, Context, Error};
 use poise::ChoiceParameter;
 use regex::Regex;
-use std::time::Duration;
-
-const MAX_CONCURRENT: u32 = 2;
-const READY_TIMEOUT: Duration = Duration::from_secs(600);
 
 #[derive(Debug, ChoiceParameter)]
 pub enum ServerType {
@@ -121,7 +117,8 @@ pub async fn create(
     }
 
     let client = k::client().await?;
-    let used_ports = k::used_node_ports(&client).await?;
+    let mut used_ports = k::used_node_ports(&client).await?;
+    used_ports.extend(values::local_node_ports());
 
     let template = values::templates_dir().join(format!("{}.yaml", kind.template_name()));
     let mut v: values::Values = serde_yaml::from_str(&std::fs::read_to_string(&template)?)?;
@@ -159,7 +156,6 @@ pub async fn create(
     }
 
     values::write(&dest, &v)?;
-    let public_port = v.node_port - 5000;
     let ver_str = values::summary(&v);
 
     if start_now == Some(false) {
@@ -170,35 +166,11 @@ pub async fn create(
         return Ok(());
     }
 
-    let running = k::running_server_count(&client).await?;
-    if running >= MAX_CONCURRENT {
+    if let Some(running) = start::launch(ctx, &client, &name).await? {
         ctx.send(reply::pending(format!(
-            "Created `{name}` ({}) but {running}/{MAX_CONCURRENT} servers are already running. Stop one, then `/start {name}`.",
-            kind.name()
-        )))
-        .await?;
-        return Ok(());
-    }
-
-    let handle = ctx.send(reply::pending(format!(
-        "🟡 **`{name}`** is starting ({ver_str})\nThis can take up to 10 minutes for modpacks."
-    )))
-    .await?;
-
-    let chart = values::chart_dir();
-    helm::upgrade_install(&name, &chart, &dest).await?;
-    k::scale(&client, &name, 1).await?;
-    let _ = k::patch_channel_id(&client, &name, &ctx.channel_id().to_string()).await;
-
-    if k::wait_until_ready(&client, &name, READY_TIMEOUT).await? {
-        handle.edit(ctx, reply::ok(format!(
-            "✅ **`{name}`** is ready! ({ver_str})\nConnect: `{}:{public_port}`",
-            config::public_domain()
-        )))
-        .await?;
-    } else {
-        handle.edit(ctx, reply::pending(format!(
-            "⏳ **`{name}`** is still starting after 10 min. Use `/status {name}` to check."
+            "Created `{name}` ({}) but {running}/{} servers are already running. Stop one, then `/start {name}`.",
+            kind.name(),
+            start::MAX_CONCURRENT
         )))
         .await?;
     }

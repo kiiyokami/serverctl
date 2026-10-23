@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 
 const NS: &str = "games";
 const CF_KEYS_SECRET: &str = "curseforge-keys";
+const STOPPED_BY: &str = "serverctl.io/stopped-by";
 
 pub async fn client() -> Result<Client> {
     Ok(Client::try_default().await?)
@@ -39,18 +40,16 @@ pub async fn scale(c: &Client, name: &str, replicas: u32) -> Result<()> {
     Ok(())
 }
 
-pub async fn patch_ttl(c: &Client, name: &str, ttl_seconds: u32) -> Result<()> {
+async fn patch_annotations(c: &Client, name: &str, annotations: serde_json::Value) -> Result<()> {
     let api: Api<Deployment> = Api::namespaced(c.clone(), NS);
-    let patch = json!({
-        "metadata": {
-            "annotations": {
-                "serverctl.io/ttl-seconds": ttl_seconds.to_string()
-            }
-        }
-    });
+    let patch = json!({ "metadata": { "annotations": annotations } });
     api.patch(name, &PatchParams::default(), &Patch::Merge(patch))
         .await?;
     Ok(())
+}
+
+pub async fn patch_ttl(c: &Client, name: &str, ttl_seconds: u32) -> Result<()> {
+    patch_annotations(c, name, json!({ "serverctl.io/ttl-seconds": ttl_seconds.to_string() })).await
 }
 
 pub async fn running_server_count(c: &Client) -> Result<u32> {
@@ -137,34 +136,35 @@ pub async fn set_curseforge_key(c: &Client, user_id: &str, key: &str) -> Result<
     }
 }
 
+fn annotation(d: &Deployment, key: &str) -> Option<String> {
+    d.metadata.annotations.as_ref()?.get(key).cloned()
+}
+
 pub fn guild_id(d: &Deployment) -> Option<String> {
-    d.metadata
-        .annotations
-        .as_ref()?
-        .get("serverctl.io/discord-guild-id")
-        .cloned()
+    annotation(d, "serverctl.io/discord-guild-id")
 }
 
 pub fn channel_id(d: &Deployment) -> Option<String> {
-    d.metadata
-        .annotations
-        .as_ref()?
-        .get("serverctl.io/discord-channel-id")
-        .cloned()
+    annotation(d, "serverctl.io/discord-channel-id")
 }
 
-pub async fn patch_channel_id(c: &Client, name: &str, channel_id: &str) -> Result<()> {
-    let api: Api<Deployment> = Api::namespaced(c.clone(), NS);
-    let patch = json!({
-        "metadata": {
-            "annotations": {
-                "serverctl.io/discord-channel-id": channel_id
-            }
-        }
-    });
-    api.patch(name, &PatchParams::default(), &Patch::Merge(patch))
-        .await?;
-    Ok(())
+/// True when the last scale-down came from /stop or server.sh, not the idle watcher.
+pub fn stopped_by_user(d: &Deployment) -> bool {
+    annotation(d, STOPPED_BY).as_deref() == Some("user")
+}
+
+/// Record which channel gets idle notices and clear the manual-stop marker.
+pub async fn mark_started(c: &Client, name: &str, channel_id: &str) -> Result<()> {
+    patch_annotations(
+        c,
+        name,
+        json!({ "serverctl.io/discord-channel-id": channel_id, STOPPED_BY: null }),
+    )
+    .await
+}
+
+pub async fn mark_stopped_by_user(c: &Client, name: &str) -> Result<()> {
+    patch_annotations(c, name, json!({ STOPPED_BY: "user" })).await
 }
 
 pub fn replicas(d: &Deployment) -> u32 {

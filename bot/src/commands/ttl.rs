@@ -14,7 +14,7 @@ pub async fn ttl(
             .await?;
         return Ok(());
     }
-    let seconds = minutes * 60;
+    let seconds = minutes.saturating_mul(60);
     k::patch_ttl(&client, &name, seconds).await?;
     if minutes == 0 {
         ctx.send(reply::ok(format!("⏱️ `{name}` will never auto-shutdown.")))

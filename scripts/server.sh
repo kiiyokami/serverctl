@@ -171,11 +171,6 @@ case "$CMD" in
             echo "  Run: bash scripts/server.sh create"
             exit 1
         fi
-        if ! helm status "$SERVER" -n "$NAMESPACE" &>/dev/null; then
-            echo "==> Provisioning $SERVER for the first time..."
-            helm upgrade --install "$SERVER" "$CHART" -f "$VALUES_FILE" -n "$NAMESPACE"
-        fi
-
         # Enforce concurrent-server limit (skip if this server is already running)
         ALREADY_RUNNING=$(kubectl get deployment "$SERVER" -n "$NAMESPACE" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo 0)
         if [[ "$ALREADY_RUNNING" -eq 0 ]]; then
@@ -187,9 +182,12 @@ case "$CMD" in
                 kubectl get deployments -n "$NAMESPACE" -o jsonpath='{range .items[?(@.spec.replicas>0)]}    bash scripts/server.sh stop {.metadata.name}{"\n"}{end}'
                 exit 1
             fi
+            # Re-apply the values file every start so mod changes take effect.
+            helm upgrade --install "$SERVER" "$CHART" -f "$VALUES_FILE" -n "$NAMESPACE"
         fi
 
         echo "==> Starting $SERVER"
+        kubectl annotate deployment/"$SERVER" -n "$NAMESPACE" serverctl.io/stopped-by- >/dev/null
         kubectl scale deployment/"$SERVER" -n "$NAMESPACE" --replicas=1
         echo "==> Waiting for $SERVER to be ready (up to 10 minutes — modpacks take a while)..."
         kubectl rollout status deployment/"$SERVER" -n "$NAMESPACE" --timeout=600s
@@ -200,6 +198,8 @@ case "$CMD" in
     stop)
         [[ -z "$SERVER" ]] && usage
         echo "==> Stopping $SERVER"
+        # Tells the Discord bot this was a manual stop, not an idle timeout.
+        kubectl annotate deployment/"$SERVER" -n "$NAMESPACE" serverctl.io/stopped-by=user --overwrite >/dev/null
         kubectl scale deployment/"$SERVER" -n "$NAMESPACE" --replicas=0
         echo "  Stopped. World data is safe on the PVC."
         ;;

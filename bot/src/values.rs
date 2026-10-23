@@ -148,6 +148,17 @@ pub fn summary(v: &Values) -> String {
     s
 }
 
+/// NodePorts claimed by config files, including servers never started (no Service yet).
+pub fn local_node_ports() -> std::collections::HashSet<u32> {
+    std::fs::read_dir(servers_dir())
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| read(&e.path()).ok())
+        .map(|v| v.node_port)
+        .collect()
+}
+
 pub fn next_free_node_port(used: &std::collections::HashSet<u32>) -> Result<u32> {
     for port in 30565..=30568 {
         if !used.contains(&port) {
