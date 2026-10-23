@@ -1,67 +1,35 @@
-use crate::{config, kube as k, minecraft, reply, values, Context, Error};
+use crate::{commands::status, kube as k, reply, values, Context, Error};
+use std::collections::HashSet;
 
-#[poise::command(slash_command)]
+#[poise::command(slash_command, guild_only)]
 pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer().await?;
-    let guild = match ctx.guild_id() {
-        Some(g) => g.to_string(),
-        None => {
-            ctx.send(reply::err("Run this in a server, not DM.")).await?;
-            return Ok(());
-        }
-    };
+    let guild = ctx.guild_id().map(|g| g.to_string()).unwrap_or_default();
     let client = k::client().await?;
     let deps = k::list_deployments(&client).await?;
-    let domain = config::public_domain();
     let mut lines = Vec::new();
+    let mut seen = HashSet::new();
 
-    for dep in deps {
-        if k::guild_id(&dep).as_deref() != Some(&guild) {
+    for dep in &deps {
+        if k::guild_id(dep).as_deref() != Some(&guild) {
             continue;
         }
         let name = dep.metadata.name.as_deref().unwrap_or("?");
-        let r = k::replicas(&dep);
-        let avail = k::available_replicas(&dep);
+        seen.insert(name.to_string());
         let v = values::read(&values::path_for(name)).ok();
-        let node_port = v.as_ref().map(|v| v.node_port).unwrap_or(0);
-        let public_port = node_port.saturating_sub(5000);
-
-        if r == 0 {
-            lines.push(format!("⚫ **`{name}`** — stopped"));
-        } else if avail >= 1 {
-            let ping = minecraft::ping(name).await;
-            let uptime = k::uptime_secs(&dep);
-            let version_str = v.as_ref().map(|v| format!("{} {}", v.server.kind, v.server.version));
-
-            let mut meta = Vec::new();
-            if let Some(s) = &ping {
-                meta.push(format!("Players: {}/{}", s.online, s.max));
-            }
-            if let Some(secs) = uptime {
-                meta.push(format!("Uptime: {}", minecraft::format_uptime(secs)));
-            }
-            if let Some(ver) = &version_str {
-                meta.push(format!("Version: {ver}"));
-            }
-
-            let detail = if meta.is_empty() {
-                String::new()
-            } else {
-                format!("\n  {} | Connect: `{domain}:{public_port}`", meta.join(" | "))
-            };
-            lines.push(format!("🟢 **`{name}`** — running{detail}"));
-        } else {
-            lines.push(format!("🟡 **`{name}`** — starting…"));
+        lines.push(status::describe(name, Some(dep), v.as_ref()).await);
+    }
+    for v in values::all() {
+        if v.discord_guild_id == guild && !seen.contains(&v.name) {
+            lines.push(status::describe(&v.name, None, Some(&v)).await);
         }
     }
 
     if lines.is_empty() {
-        lines.push("_(none)_ — try `/create`".into());
+        lines.push("No servers yet. Make one with `/create`.".into());
     }
 
-    ctx.send(reply::info(
-        format!("**Servers in this guild:**\n{}", lines.join("\n"))
-    ))
-    .await?;
+    ctx.send(reply::info(format!("**Servers**\n{}", lines.join("\n\n"))))
+        .await?;
     Ok(())
 }

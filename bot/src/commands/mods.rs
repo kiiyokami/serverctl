@@ -190,18 +190,19 @@ pub async fn apply_mod_urls(
     Ok(Ok(added))
 }
 
-#[poise::command(slash_command)]
+#[poise::command(slash_command, guild_only)]
 pub async fn mods(
     ctx: Context<'_>,
-    #[description = "Server name"] name: String,
+    #[description = "Server name"]
+    #[autocomplete = "super::server_names"]
+    name: String,
     #[description = "Mod / modpack / plugin URL or .jar URL"] url: String,
 ) -> Result<(), Error> {
     ctx.defer().await?;
     let guild = ctx.guild_id().map(|g| g.to_string()).unwrap_or_default();
     let client = k::client().await?;
     if !auth::guild_owns(&client, &guild, &name).await? {
-        ctx.send(reply::err(format!("`{name}` isn't managed by this guild.")))
-            .await?;
+        ctx.send(reply::unknown_server(&name)).await?;
         return Ok(());
     }
 

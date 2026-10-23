@@ -1,4 +1,5 @@
 use crate::{auth, config, helm, kube as k, reply, values, Context, Error};
+use poise::serenity_prelude as serenity;
 use std::time::Duration;
 use tokio::sync::Mutex;
 
@@ -8,9 +9,15 @@ const READY_TIMEOUT: Duration = Duration::from_secs(600);
 // Serializes count-then-scale so two simultaneous starts can't both pass the limit.
 static START_LOCK: Mutex<()> = Mutex::const_new(());
 
-/// Scale `name` up and report until it is ready. Returns `Some(running)`
-/// without starting anything when the concurrent limit is already reached.
-pub async fn launch(ctx: Context<'_>, client: &kube::Client, name: &str) -> Result<Option<u32>, Error> {
+/// Scale `name` up and keep the deferred response behind `token` updated until it is ready.
+/// Returns `Some(running)` without starting anything when the concurrent limit is already reached.
+pub async fn launch(
+    http: &serenity::Http,
+    token: &str,
+    channel_id: serenity::ChannelId,
+    client: &kube::Client,
+    name: &str,
+) -> Result<Option<u32>, Error> {
     let path = values::path_for(name);
     {
         let _guard = START_LOCK.lock().await;
@@ -30,25 +37,25 @@ pub async fn launch(ctx: Context<'_>, client: &kube::Client, name: &str) -> Resu
         }
         k::scale(client, name, 1).await?;
     }
-    let _ = k::mark_started(client, name, &ctx.channel_id().to_string()).await;
+    let _ = k::mark_started(client, name, &channel_id.to_string()).await;
 
     let v = values::read(&path).ok();
     let public_port = v.as_ref().map(|v| v.node_port).unwrap_or(0).saturating_sub(5000);
     let ver_str = v.as_ref().map(values::summary).unwrap_or_default();
 
-    let handle = ctx.send(reply::pending(format!(
+    reply::edit(http, token, reply::pending(format!(
         "🟡 **`{name}`** is starting ({ver_str})\nThis can take up to 10 minutes for modpacks."
     )))
     .await?;
 
     if k::wait_until_ready(client, name, READY_TIMEOUT).await? {
-        handle.edit(ctx, reply::ok(format!(
+        reply::edit(http, token, reply::ok(format!(
             "✅ **`{name}`** is ready! ({ver_str})\nConnect: `{}:{public_port}`",
             config::public_domain()
         )))
         .await?;
     } else {
-        handle.edit(ctx, reply::pending(format!(
+        reply::edit(http, token, reply::pending(format!(
             "⏳ **`{name}`** is still starting after 10 min. Use `/status {name}` to check."
         )))
         .await?;
@@ -56,24 +63,29 @@ pub async fn launch(ctx: Context<'_>, client: &kube::Client, name: &str) -> Resu
     Ok(None)
 }
 
-#[poise::command(slash_command)]
+#[poise::command(slash_command, guild_only)]
 pub async fn start(
     ctx: Context<'_>,
-    #[description = "Server name"] name: String,
+    #[description = "Server name"]
+    #[autocomplete = "super::server_names"]
+    name: String,
 ) -> Result<(), Error> {
+    let poise::Context::Application(app) = ctx else {
+        return Ok(());
+    };
     ctx.defer().await?;
     let guild = ctx.guild_id().map(|g| g.to_string()).unwrap_or_default();
     let client = k::client().await?;
 
     if !auth::guild_owns(&client, &guild, &name).await? {
-        ctx.send(reply::err(format!("`{name}` isn't managed by this guild.")))
-            .await?;
+        ctx.send(reply::unknown_server(&name)).await?;
         return Ok(());
     }
 
-    if let Some(running) = launch(ctx, &client, &name).await? {
+    let token = &app.interaction.token;
+    if let Some(running) = launch(ctx.http(), token, ctx.channel_id(), &client, &name).await? {
         ctx.send(reply::err(format!(
-            "Already {running}/{MAX_CONCURRENT} servers running. Stop one first."
+            "Already {running}/{MAX_CONCURRENT} servers running. `/stop` one first."
         )))
         .await?;
     }

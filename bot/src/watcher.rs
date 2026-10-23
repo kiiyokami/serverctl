@@ -1,4 +1,4 @@
-use crate::{kube as k, minecraft};
+use crate::{kube as k, minecraft, reply};
 use poise::serenity_prelude as serenity;
 use std::collections::HashMap;
 
@@ -40,7 +40,7 @@ pub async fn run(ctx: serenity::Context) {
                         let channel = serenity::ChannelId::new(ch_id);
                         let embed = serenity::CreateEmbed::default()
                             .description(format!("⚫ **`{name}`** stopped (idle timeout)."))
-                            .color(0x5865F2u32);
+                            .color(reply::BLUE);
                         let msg = serenity::CreateMessage::new().embed(embed);
                         let _ = channel.send_message(http, msg).await;
                     }

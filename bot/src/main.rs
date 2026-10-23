@@ -23,6 +23,23 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
+    match error {
+        poise::FrameworkError::Command { error, ctx, .. } => {
+            let name = &ctx.command().name;
+            tracing::error!("/{name} failed: {error}");
+            if let Err(e) = ctx.send(reply::failure(name, &error)).await {
+                tracing::warn!("couldn't report /{name} failure: {e}");
+            }
+        }
+        other => {
+            if let Err(e) = poise::builtins::on_error(other).await {
+                tracing::warn!("error handler failed: {e}");
+            }
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
@@ -45,7 +62,9 @@ async fn main() -> Result<()> {
                 commands::mods::mods(),
                 commands::curseforge_key::curseforge_key(),
                 commands::ttl::ttl(),
+                commands::settings::settings(),
             ],
+            on_error: |error| Box::pin(on_error(error)),
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {

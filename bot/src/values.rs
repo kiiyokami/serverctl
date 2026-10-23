@@ -148,15 +148,19 @@ pub fn summary(v: &Values) -> String {
     s
 }
 
-/// NodePorts claimed by config files, including servers never started (no Service yet).
-pub fn local_node_ports() -> std::collections::HashSet<u32> {
+/// Every readable server config, including servers never started (no Deployment yet).
+pub fn all() -> Vec<Values> {
     std::fs::read_dir(servers_dir())
         .into_iter()
         .flatten()
         .flatten()
         .filter_map(|e| read(&e.path()).ok())
-        .map(|v| v.node_port)
         .collect()
+}
+
+/// NodePorts claimed by config files, including servers never started (no Service yet).
+pub fn local_node_ports() -> std::collections::HashSet<u32> {
+    all().into_iter().map(|v| v.node_port).collect()
 }
 
 pub fn next_free_node_port(used: &std::collections::HashSet<u32>) -> Result<u32> {
@@ -165,7 +169,7 @@ pub fn next_free_node_port(used: &std::collections::HashSet<u32>) -> Result<u32>
             return Ok(port);
         }
     }
-    anyhow::bail!("All NodePorts 30565–30568 are in use")
+    anyhow::bail!("All 4 server slots are taken. `/delete` a server first.")
 }
 
 #[cfg(test)]

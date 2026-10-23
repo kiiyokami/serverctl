@@ -1,9 +1,11 @@
 use crate::{auth, helm, kube as k, reply, values, Context, Error};
 
-#[poise::command(slash_command)]
+#[poise::command(slash_command, guild_only)]
 pub async fn delete(
     ctx: Context<'_>,
-    #[description = "Server name"] name: String,
+    #[description = "Server name"]
+    #[autocomplete = "super::server_names"]
+    name: String,
     #[description = "Also wipe world data PVC and local config (default: false)"]
     purge: Option<bool>,
 ) -> Result<(), Error> {
@@ -11,8 +13,7 @@ pub async fn delete(
     let guild = ctx.guild_id().map(|g| g.to_string()).unwrap_or_default();
     let client = k::client().await?;
     if !auth::guild_owns(&client, &guild, &name).await? {
-        ctx.send(reply::err(format!("`{name}` isn't managed by this guild.")))
-            .await?;
+        ctx.send(reply::unknown_server(&name)).await?;
         return Ok(());
     }
 
@@ -42,7 +43,7 @@ pub async fn delete(
         }
     } else {
         report.push(
-            "ℹ️ World data preserved. Re-run with `purge:true` to also wipe the PVC.".to_string(),
+            format!("ℹ️ World data kept. A new server named `{name}` will reuse it."),
         );
     }
 
